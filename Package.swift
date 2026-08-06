@@ -10,13 +10,15 @@ let package = Package(
     ],
     products: [
         .library(name: "JarvisCore", targets: ["JarvisCore"]),
+        .library(name: "AgentUI", targets: ["AgentUI"]),
         .executable(name: "jarvis", targets: ["JarvisCLI"]),
         .executable(name: "jarvis-hud", targets: ["JarvisHUD"])
     ],
     targets: [
         .target(name: "JarvisCore"),
+        .target(name: "AgentUI", dependencies: ["JarvisCore"]),
         .executableTarget(name: "JarvisCLI", dependencies: ["JarvisCore"]),
-        .executableTarget(name: "JarvisHUD", dependencies: ["JarvisCore"]),
+        .executableTarget(name: "JarvisHUD", dependencies: ["AgentUI"]),
         .testTarget(name: "JarvisCoreTests", dependencies: ["JarvisCore"])
     ]
 )
