@@ -13,23 +13,42 @@ public struct HUDRootView: View {
     public init() {}
 
     public var body: some View {
-        ZStack {
-            Color(red: 0.005, green: 0.02, blue: 0.035)
-                .ignoresSafeArea()
+        GeometryReader { geometry in
+            ZStack {
+                Color(red: 0.002, green: 0.012, blue: 0.026)
+                    .ignoresSafeArea()
 
-            CircuitBackground()
-                .opacity(0.42)
+                CircuitBackground()
+                    .opacity(0.48)
 
-            VStack(spacing: 0) {
-                topBar
-                Spacer()
+                HStack(spacing: 0) {
+                    TelemetryPanel(alignment: .leading)
+                        .frame(width: 170)
+
+                    Spacer(minLength: 0)
+
+                    TelemetryPanel(alignment: .trailing)
+                        .frame(width: 170)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 90)
+                .padding(.bottom, 130)
+
                 CodeSphere(mode: mode)
-                    .frame(width: 600, height: 600)
-                Spacer()
-                commandConsole
-                    .padding(.bottom, 18)
-                modePicker
-                    .padding(.bottom, 28)
+                    .frame(
+                        width: min(geometry.size.width * 0.68, geometry.size.height * 0.84),
+                        height: min(geometry.size.width * 0.68, geometry.size.height * 0.84)
+                    )
+                    .offset(y: -14)
+
+                VStack(spacing: 0) {
+                    topBar
+                    Spacer()
+                    commandConsole
+                        .padding(.bottom, 12)
+                    modePicker
+                        .padding(.bottom, 18)
+                }
             }
         }
         .foregroundStyle(.cyan)
@@ -50,7 +69,7 @@ public struct HUDRootView: View {
     private var topBar: some View {
         HStack {
             VStack(alignment: .leading, spacing: 3) {
-                Text("JARVIS // CORE INTERFACE")
+                Text("AGENT // HOLOGRAPHIC CORE")
                     .font(.system(size: 15, weight: .semibold, design: .monospaced))
                 Text("LOCAL SYSTEM · SECURE CHANNEL")
                     .font(.system(size: 10, design: .monospaced))
@@ -189,18 +208,19 @@ private struct HUDButtonStyle: ButtonStyle {
 
 private struct CodeSphere: View {
     let mode: CoreMode
-    private let particles = CodeParticle.makeCloud(count: 360)
+    private let particles = CodeParticle.makeCloud(count: 1_120)
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                let baseRadius = min(size.width, size.height) * 0.34
+                let baseRadius = min(size.width, size.height) * 0.39
                 let pulse = 1 + sin(time * (mode == .speaking ? 7 : 2.2)) * mode.pulse
                 let angle = time * mode.speed
 
                 drawGlow(in: &context, center: center, radius: baseRadius * pulse)
+                drawEnergyShell(in: &context, center: center, radius: baseRadius, time: time)
                 drawRings(in: &context, center: center, radius: baseRadius, time: time)
 
                 let projected = particles.map { particle in
@@ -208,7 +228,7 @@ private struct CodeSphere: View {
                 }.sorted { $0.depth < $1.depth }
 
                 for particle in projected {
-                    let depthLight = 0.18 + particle.depth * 0.82
+                    let depthLight = 0.08 + particle.depth * 0.88
                     let text = Text(particle.token)
                         .font(.system(size: particle.fontSize, weight: .medium, design: .monospaced))
                         .foregroundStyle(Color.cyan.opacity(depthLight))
@@ -225,17 +245,22 @@ private struct CodeSphere: View {
                     startRadius: 0,
                     endRadius: 24
                 ))
+
+                let status = Text(mode.label.uppercased())
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Color.white.opacity(0.92))
+                context.draw(status, at: CGPoint(x: center.x, y: center.y + 42), anchor: .center)
             }
         }
-        .accessibilityLabel("코드 입자로 이루어진 자비스 코어")
+        .accessibilityLabel("코드 입자로 이루어진 홀로그램 에이전트 코어")
     }
 
     private func drawGlow(in context: inout GraphicsContext, center: CGPoint, radius: Double) {
         let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
         context.fill(Path(ellipseIn: rect), with: .radialGradient(
             Gradient(stops: [
-                .init(color: .cyan.opacity(0.12), location: 0),
-                .init(color: .cyan.opacity(0.025), location: 0.62),
+                .init(color: .cyan.opacity(0.2), location: 0),
+                .init(color: .blue.opacity(0.07), location: 0.62),
                 .init(color: .clear, location: 1)
             ]),
             center: center,
@@ -244,9 +269,69 @@ private struct CodeSphere: View {
         ))
     }
 
+    private func drawEnergyShell(
+        in context: inout GraphicsContext,
+        center: CGPoint,
+        radius: Double,
+        time: Double
+    ) {
+        for index in 0..<5 {
+            let inset = Double(index) * 3.5
+            let shellRadius = radius + 7 - inset
+            let rect = CGRect(
+                x: center.x - shellRadius,
+                y: center.y - shellRadius,
+                width: shellRadius * 2,
+                height: shellRadius * 2
+            )
+            context.stroke(
+                Path(ellipseIn: rect),
+                with: .color(.cyan.opacity(0.2 - Double(index) * 0.025)),
+                style: StrokeStyle(
+                    lineWidth: index == 0 ? 2.2 : 0.7,
+                    dash: [2, Double(5 + index * 3)],
+                    dashPhase: time * Double(index + 1) * 9
+                )
+            )
+        }
+
+        drawOrbitalPlane(
+            in: &context,
+            center: center,
+            radius: radius * 1.12,
+            rotation: time * 0.08,
+            opacity: 0.48
+        )
+        drawOrbitalPlane(
+            in: &context,
+            center: center,
+            radius: radius * 1.08,
+            rotation: -0.72 + time * 0.05,
+            opacity: 0.31
+        )
+    }
+
+    private func drawOrbitalPlane(
+        in context: inout GraphicsContext,
+        center: CGPoint,
+        radius: Double,
+        rotation: Double,
+        opacity: Double
+    ) {
+        var layer = context
+        layer.translateBy(x: center.x, y: center.y)
+        layer.rotate(by: .radians(rotation))
+        let rect = CGRect(x: -radius * 0.34, y: -radius, width: radius * 0.68, height: radius * 2)
+        layer.stroke(
+            Path(ellipseIn: rect),
+            with: .color(.cyan.opacity(opacity)),
+            style: StrokeStyle(lineWidth: 1.2, dash: [10, 7])
+        )
+    }
+
     private func drawRings(in context: inout GraphicsContext, center: CGPoint, radius: Double, time: Double) {
         for index in 0..<3 {
-            let ringRadius = radius * (1.13 + Double(index) * 0.1)
+            let ringRadius = radius * (1.08 + Double(index) * 0.08)
             let rect = CGRect(
                 x: center.x - ringRadius,
                 y: center.y - ringRadius * 0.36,
@@ -257,8 +342,8 @@ private struct CodeSphere: View {
             let dashPhase = time * Double(index + 1) * 12
             context.stroke(
                 ring,
-                with: .color(.cyan.opacity(0.2 - Double(index) * 0.045)),
-                style: StrokeStyle(lineWidth: 1, dash: [3, 8], dashPhase: dashPhase)
+                with: .color(.cyan.opacity(0.34 - Double(index) * 0.06)),
+                style: StrokeStyle(lineWidth: 1.2, dash: [3, 8], dashPhase: dashPhase)
             )
             ring = Path(ellipseIn: rect.insetBy(dx: ringRadius * 0.04, dy: ringRadius * 0.014))
             context.stroke(ring, with: .color(.cyan.opacity(0.08)), lineWidth: 1)
@@ -290,7 +375,7 @@ private struct CodeParticle: Sendable {
                 y: center.y + y * radius * perspective
             ),
             depth: (rotatedZ + 1) / 2,
-            fontSize: 5.5 + (rotatedZ + 1) * 2.3
+            fontSize: 2.4 + (rotatedZ + 1) * 1.9
         )
     }
 
@@ -311,6 +396,48 @@ private struct CodeParticle: Sendable {
                 y: cos(phi),
                 z: sin(phi) * sin(theta)
             )
+        }
+    }
+}
+
+private struct TelemetryPanel: View {
+    let alignment: HorizontalAlignment
+
+    private var textAlignment: TextAlignment {
+        alignment == .leading ? .leading : .trailing
+    }
+
+    var body: some View {
+        VStack(alignment: alignment, spacing: 18) {
+            telemetryGroup(title: "CORE MATRIX", values: ["NODES  1,120", "SYNC   99.98%", "STATE  NOMINAL"])
+            telemetryGroup(title: "LOCAL LINK", values: ["MAC    ONLINE", "PHONE  STANDBY", "AUDIO  READY"])
+            Spacer()
+            telemetryGroup(title: "SECURITY", values: ["POLICY ACTIVE", "CHANNEL LOCAL", "LEVEL  00"])
+        }
+        .font(.system(size: 9, weight: .medium, design: .monospaced))
+        .foregroundStyle(.cyan.opacity(0.55))
+    }
+
+    private func telemetryGroup(title: String, values: [String]) -> some View {
+        VStack(alignment: alignment, spacing: 5) {
+            Text(title)
+                .fontWeight(.bold)
+                .foregroundStyle(.cyan.opacity(0.85))
+
+            Rectangle()
+                .fill(.cyan.opacity(0.4))
+                .frame(width: 92, height: 1)
+
+            ForEach(values, id: \.self) { value in
+                Text(value)
+            }
+        }
+        .multilineTextAlignment(textAlignment)
+        .padding(12)
+        .background(.cyan.opacity(0.025))
+        .overlay {
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(.cyan.opacity(0.13), lineWidth: 0.7)
         }
     }
 }
