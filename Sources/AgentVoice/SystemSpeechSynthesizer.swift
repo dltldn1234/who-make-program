@@ -5,6 +5,7 @@ public final class SystemSpeechSynthesizer: NSObject, AVSpeechSynthesizerDelegat
     public var onFinish: (() -> Void)?
 
     private let synthesizer = AVSpeechSynthesizer()
+    private var activeUtterance: AVSpeechUtterance?
 
     public override init() {
         super.init()
@@ -28,10 +29,12 @@ public final class SystemSpeechSynthesizer: NSObject, AVSpeechSynthesizerDelegat
         utterance.pitchMultiplier = 0.92
         utterance.volume = 0.92
         utterance.preUtteranceDelay = 0.08
+        activeUtterance = utterance
         synthesizer.speak(utterance)
     }
 
     public func stop() {
+        activeUtterance = nil
         synthesizer.stopSpeaking(at: .immediate)
     }
 
@@ -39,7 +42,10 @@ public final class SystemSpeechSynthesizer: NSObject, AVSpeechSynthesizerDelegat
         _ synthesizer: AVSpeechSynthesizer,
         didFinish utterance: AVSpeechUtterance
     ) {
+        let identifier = ObjectIdentifier(utterance)
         Task { @MainActor [weak self] in
+            guard self?.activeUtterance.map(ObjectIdentifier.init) == identifier else { return }
+            self?.activeUtterance = nil
             self?.onFinish?()
         }
     }
@@ -48,7 +54,10 @@ public final class SystemSpeechSynthesizer: NSObject, AVSpeechSynthesizerDelegat
         _ synthesizer: AVSpeechSynthesizer,
         didCancel utterance: AVSpeechUtterance
     ) {
+        let identifier = ObjectIdentifier(utterance)
         Task { @MainActor [weak self] in
+            guard self?.activeUtterance.map(ObjectIdentifier.init) == identifier else { return }
+            self?.activeUtterance = nil
             self?.onFinish?()
         }
     }
