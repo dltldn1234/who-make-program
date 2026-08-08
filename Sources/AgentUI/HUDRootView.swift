@@ -1,5 +1,6 @@
 import SwiftUI
 import JarvisCore
+import AgentVoice
 
 public struct HUDRootView: View {
     @State private var mode: CoreMode = .idle
@@ -7,6 +8,7 @@ public struct HUDRootView: View {
     @State private var response = "시스템 준비 완료"
     @State private var pendingCommand: PreparedCommand?
     @State private var showingApproval = false
+    @StateObject private var voice = VoiceInteractionController()
 
     private let engine = JarvisEngine(executor: MacActionExecutor())
 
@@ -34,7 +36,7 @@ public struct HUDRootView: View {
                 .padding(.top, 90)
                 .padding(.bottom, 130)
 
-                CodeSphere(mode: mode)
+                CodeSphere(mode: mode, audioEnergy: voice.audioLevel)
                     .frame(
                         width: min(geometry.size.width * 0.68, geometry.size.height * 0.84),
                         height: min(geometry.size.width * 0.68, geometry.size.height * 0.84)
@@ -52,6 +54,14 @@ public struct HUDRootView: View {
             }
         }
         .foregroundStyle(.cyan)
+        .onAppear {
+            voice.onFinalTranscript = { transcript in
+                submitCommand(transcript)
+            }
+        }
+        .onChange(of: voice.state) { _, state in
+            synchronizeVoiceState(state)
+        }
         .alert("명령 실행 승인", isPresented: $showingApproval, presenting: pendingCommand) { prepared in
             Button("취소", role: .cancel) {
                 execute(prepared, approved: false)
@@ -97,6 +107,25 @@ public struct HUDRootView: View {
 
     private var commandConsole: some View {
         VStack(spacing: 10) {
+            if !voice.transcript.isEmpty || voice.state.isListening {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(.cyan)
+                        .frame(width: 6, height: 6)
+                        .shadow(color: .cyan, radius: 5)
+
+                    Text(voice.transcript.isEmpty ? "음성을 기다리는 중..." : voice.transcript)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.cyan.opacity(0.72))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 0)
+
+                    AudioEnergyBar(level: voice.audioLevel)
+                }
+                .frame(maxWidth: 700)
+            }
+
             Text(response)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(.cyan.opacity(0.78))
@@ -104,6 +133,13 @@ public struct HUDRootView: View {
                 .frame(maxWidth: 620, minHeight: 18)
 
             HStack(spacing: 10) {
+                Button(action: voice.toggleListening) {
+                    Image(systemName: voice.state.isListening ? "stop.fill" : "mic.fill")
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(HUDButtonStyle(selected: voice.state.isListening))
+                .help(voice.state.isListening ? "음성 입력 종료" : "음성 입력 시작")
+
                 TextField("명령 입력 · 예: Xcode 열어줘", text: $command)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13, design: .monospaced))
@@ -111,9 +147,9 @@ public struct HUDRootView: View {
                     .padding(.vertical, 11)
                     .background(.black.opacity(0.35), in: Capsule())
                     .overlay(Capsule().stroke(.cyan.opacity(0.38)))
-                    .onSubmit(submitCommand)
+                    .onSubmit { submitCommand() }
 
-                Button("EXECUTE", action: submitCommand)
+                Button("EXECUTE") { submitCommand() }
                     .buttonStyle(HUDButtonStyle(selected: true))
                     .disabled(command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
@@ -121,8 +157,8 @@ public struct HUDRootView: View {
         }
     }
 
-    private func submitCommand() {
-        let submitted = command.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func submitCommand(_ voiceCommand: String? = nil) {
+        let submitted = (voiceCommand ?? command).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !submitted.isEmpty else { return }
 
         command = ""
@@ -152,8 +188,33 @@ public struct HUDRootView: View {
             response = result.message
             mode = result.succeeded ? .speaking : .idle
 
-            try? await Task.sleep(for: .seconds(1.4))
-            if mode == .speaking { mode = .idle }
+            if approved {
+                voice.speak(result.message)
+            }
+
+            if !approved {
+                try? await Task.sleep(for: .seconds(1.4))
+                if mode == .speaking { mode = .idle }
+            }
+        }
+    }
+
+    private func synchronizeVoiceState(_ state: VoiceInteractionState) {
+        switch state {
+        case .idle:
+            if mode == .listening || mode == .speaking {
+                mode = .idle
+            }
+        case .requestingPermission, .processing:
+            mode = .thinking
+        case .listening:
+            mode = .listening
+            response = "음성 명령을 듣고 있습니다"
+        case .speaking:
+            mode = .speaking
+        case let .failed(message):
+            mode = .idle
+            response = message
         }
     }
 }
@@ -206,8 +267,30 @@ private struct HUDButtonStyle: ButtonStyle {
     }
 }
 
+private struct AudioEnergyBar: View {
+    let level: Float
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 2) {
+            ForEach(0..<12, id: \.self) { index in
+                let threshold = Float(index + 1) / 12
+
+                Capsule()
+                    .fill(threshold <= level ? Color.cyan : Color.cyan.opacity(0.12))
+                    .frame(width: 3, height: 5 + CGFloat(index % 4) * 3)
+                    .shadow(color: threshold <= level ? .cyan : .clear, radius: 3)
+            }
+        }
+        .frame(width: 62)
+        .animation(.linear(duration: 0.08), value: level)
+        .accessibilityLabel("마이크 입력 세기")
+        .accessibilityValue("\(Int(level * 100)) 퍼센트")
+    }
+}
+
 private struct CodeSphere: View {
     let mode: CoreMode
+    let audioEnergy: Float
     private let particles = CodeParticle.makeCloud(count: 1_120)
 
     var body: some View {
@@ -216,7 +299,8 @@ private struct CodeSphere: View {
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let baseRadius = min(size.width, size.height) * 0.39
-                let pulse = 1 + sin(time * (mode == .speaking ? 7 : 2.2)) * mode.pulse
+                let reactivePulse = mode == .listening ? Double(audioEnergy) * 0.13 : 0
+                let pulse = 1 + sin(time * (mode == .speaking ? 7 : 2.2)) * mode.pulse + reactivePulse
                 let angle = time * mode.speed
 
                 drawGlow(in: &context, center: center, radius: baseRadius * pulse)
