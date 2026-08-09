@@ -96,6 +96,8 @@ public final class AgentLinkServer: ObservableObject {
     private var listener: NWListener?
     private var channel: AgentLinkChannel?
     private var paired = false
+    private var listenerGeneration = UUID()
+    private var trustRefreshTask: Task<Void, Never>?
 
     public init(name: String) {
         identity = AgentDeviceIdentity(id: UUID(), name: name, kind: .mac)
@@ -103,6 +105,8 @@ public final class AgentLinkServer: ObservableObject {
 
     public func start() {
         stop()
+        listenerGeneration = UUID()
+        let generation = listenerGeneration
         pairingCode = String(format: "%06d", Int.random(in: 0...999_999))
 
         do {
@@ -123,11 +127,12 @@ public final class AgentLinkServer: ObservableObject {
             listener.service = NWListener.Service(name: identity.name, type: AgentLinkService.type)
             listener.stateUpdateHandler = { [weak self] listenerState in
                 Task { @MainActor [weak self] in
-                    self?.handleListenerState(listenerState)
+                    self?.handleListenerState(listenerState, generation: generation)
                 }
             }
             listener.newConnectionHandler = { [weak self] connection in
                 Task { @MainActor [weak self] in
+                    guard self?.listenerGeneration == generation else { return }
                     self?.accept(connection)
                 }
             }
@@ -140,6 +145,8 @@ public final class AgentLinkServer: ObservableObject {
     }
 
     public func stop() {
+        trustRefreshTask?.cancel()
+        trustRefreshTask = nil
         channel?.cancel()
         channel = nil
         listener?.cancel()
@@ -205,13 +212,27 @@ public final class AgentLinkServer: ObservableObject {
                 secret: serverCredential.secret
             )
             channel?.send(.trustEstablished(device: identity, credential: clientCredential))
+            scheduleListenerRefresh()
         } catch {
             state = .failed(message: "기기 신뢰 정보를 저장하지 못했습니다.")
             channel?.cancel()
         }
     }
 
-    private func handleListenerState(_ listenerState: NWListener.State) {
+    private func scheduleListenerRefresh() {
+        trustRefreshTask?.cancel()
+        trustRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(750))
+            guard !Task.isCancelled else { return }
+            self?.start()
+        }
+    }
+
+    private func handleListenerState(
+        _ listenerState: NWListener.State,
+        generation: UUID
+    ) {
+        guard generation == listenerGeneration else { return }
         switch listenerState {
         case .failed(let error):
             state = .failed(message: error.localizedDescription)
