@@ -81,6 +81,22 @@ enum HolographicMetalShader {
         float grain = fbm(float2(angle * 4.2 - t * 0.7, r * 16.0 + t * 0.9));
         float edgeWarp = (grain - 0.5) * (0.045 + u.turbulence * 0.03);
 
+        // Reconstruct a lit sphere instead of shading a flat disc. The rotating
+        // normal field gives the three reactor panels independent apparent depth.
+        float normalizedRadius = r / max(radius, 0.001);
+        float sphereMask = smoothstep(1.02, 0.96, normalizedRadius);
+        float sphereZ = sqrt(max(1.0 - normalizedRadius * normalizedRadius, 0.0));
+        float3 normal = normalize(float3(p / radius, sphereZ));
+        float3 lightDirection = normalize(float3(-0.38, 0.52, 0.78));
+        float diffuse = 0.22 + 0.78 * max(dot(normal, lightDirection), 0.0);
+        float fresnel = pow(1.0 - max(normal.z, 0.0), 2.4);
+        float sphericalAngle = atan2(normal.y, normal.x) - t * 0.44;
+        float panelWave = cos(sphericalAngle * 3.0);
+        float panelLighting = 0.72 + 0.28 * panelWave;
+        float threeWaySeam = abs(sin(sphericalAngle * 1.5));
+        float seamGlow = sphereMask * glowLine(threeWaySeam, 0.025, 0.19)
+            * smoothstep(0.12, 0.42, normalizedRadius);
+
         // The reference silhouette: a thick, broken reactor ring with a hot irregular rim.
         float outerDistance = r - radius - edgeWarp;
         float outerRing = glowLine(outerDistance, 0.012, 0.34);
@@ -113,9 +129,16 @@ enum HolographicMetalShader {
         spokes *= smoothstep(radius * 0.9, radius * 0.16, r);
         float hub = exp(-r * 24.0) * (1.35 + u.energy * 1.4);
 
-        float innerDisc = smoothstep(radius * 0.88, radius * 0.18, r);
+        float innerDisc = smoothstep(radius * 0.94, radius * 0.1, r);
         float plasmaVeins = pow(fbm(rotate2D(p, -spin * 0.65) * 9.0 + t * 0.22), 2.35);
-        float reactorFill = innerDisc * (0.16 + plasmaVeins * 0.58 + blades * 0.22);
+        float surfaceCracks = smoothstep(0.62, 0.88, fbm(normal.xy * 13.0 + normal.z * 4.0 + t * 0.16));
+        float reactorFill = innerDisc * sphereMask * (
+            0.2 * diffuse * panelLighting
+            + plasmaVeins * 0.48
+            + surfaceCracks * (0.28 + u.energy * 0.36)
+            + blades * 0.18
+            + fresnel * 0.34
+        );
 
         // Concentric mechanical arcs rotate independently around the turbine.
         float arcPattern = abs(sin(angle * 6.0 - t * 1.1));
@@ -142,9 +165,12 @@ enum HolographicMetalShader {
 
         float turbulentFill = blades * (0.2 + grain * 0.42 + u.energy * 0.22);
         float energy = outerRing + hotRim + bladeEdges + spokes + hub
-            + innerArc + outerArc + sparks + shockwave + turbulentFill + reactorFill;
+            + innerArc + outerArc + sparks + shockwave + turbulentFill + reactorFill + seamGlow;
         float aura = exp(-max(r - radius, 0.0) * 7.5) * smoothstep(radius * 1.65, radius * 0.72, r) * 0.13;
-        float3 color = accent * (energy + aura) + hot * (hub + hotRim * 0.52 + spokes * 0.82 + bladeEdges * 0.42);
+        float3 color = accent * (energy + aura) + hot * (
+            hub + hotRim * 0.52 + spokes * 0.82 + bladeEdges * 0.42
+            + seamGlow * 0.9 + surfaceCracks * sphereMask * 0.28
+        );
         color *= 0.88 + 0.18 * sin(t * 4.0 + grain * 5.0);
 
         float alpha = clamp(energy * 0.72 + aura + blades * 0.08, 0.0, 1.0);
