@@ -34,5 +34,29 @@ let project = Project(
                 ]
             )
         ),
+        .target(
+            name: "AgentPhone",
+            destinations: .iOS,
+            product: .app,
+            bundleId: "com.dltldn1234.agent.phone",
+            deploymentTargets: .iOS("18.0"),
+            infoPlist: .extendingDefault(
+                with: [
+                    "CFBundleDisplayName": "Agent",
+                    "NSLocalNetworkUsageDescription": "Mac의 Agent와 안전하게 연결하고 명령을 전달하기 위해 로컬 네트워크를 사용합니다.",
+                    "NSBonjourServices": ["_agent-link._tcp"],
+                ]
+            ),
+            sources: ["Apps/AgentPhone/Sources/**"],
+            dependencies: [
+                .package(product: "AgentLink"),
+            ],
+            settings: .settings(
+                base: [
+                    "SWIFT_STRICT_CONCURRENCY": "complete",
+                    "SWIFT_VERSION": "6.0",
+                ]
+            )
+        ),
     ]
 )
