@@ -5,7 +5,7 @@ import AgentVoice
 import AgentMotion
 
 public struct HUDRootView: View {
-    @State private var mode: CoreMode = .idle
+    @State private var mode: HolographicCorePhase = .idle
     @State private var command = ""
     @State private var response = "시스템 준비 완료"
     @State private var pendingCommand: PreparedCommand?
@@ -130,7 +130,7 @@ public struct HUDRootView: View {
 
     private var modePicker: some View {
         HStack(spacing: 8) {
-            ForEach(CoreMode.allCases) { item in
+            ForEach(HolographicCorePhase.allCases) { item in
                 Button(item.label) { mode = item }
                     .buttonStyle(HUDButtonStyle(selected: mode == item))
             }
@@ -268,39 +268,6 @@ public struct HUDRootView: View {
     }
 }
 
-private enum CoreMode: String, CaseIterable, Identifiable {
-    case idle, listening, thinking, speaking
-
-    var id: Self { self }
-
-    var label: String {
-        switch self {
-        case .idle: "대기"
-        case .listening: "듣는 중"
-        case .thinking: "분석 중"
-        case .speaking: "응답 중"
-        }
-    }
-
-    var speed: Double {
-        switch self {
-        case .idle: 0.12
-        case .listening: 0.22
-        case .thinking: 0.75
-        case .speaking: 0.3
-        }
-    }
-
-    var pulse: Double {
-        switch self {
-        case .idle: 0.02
-        case .listening: 0.08
-        case .thinking: 0.04
-        case .speaking: 0.11
-        }
-    }
-}
-
 private struct HUDButtonStyle: ButtonStyle {
     let selected: Bool
 
@@ -338,7 +305,7 @@ private struct AudioEnergyBar: View {
 }
 
 private struct CodeSphere: View {
-    let mode: CoreMode
+    let mode: HolographicCorePhase
     let audioEnergy: Float
     private let particles = CodeParticle.makeCloud(count: 640)
 
@@ -349,8 +316,8 @@ private struct CodeSphere: View {
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let baseRadius = min(size.width, size.height) * 0.34
                 let reactivePulse = mode == .listening ? Double(audioEnergy) * 0.035 : 0
-                let pulse = 1 + sin(time * (mode == .speaking ? 7 : 2.2)) * mode.pulse + reactivePulse
-                let angle = time * mode.speed
+                let pulse = 1 + sin(time * (mode == .speaking ? 7 : 2.2)) * Double(mode.pulseStrength) + reactivePulse
+                let angle = time * Double(mode.rotationSpeed)
 
                 drawAtmosphere(in: &context, center: center, radius: baseRadius, time: time)
                 drawGlow(in: &context, center: center, radius: baseRadius * pulse)

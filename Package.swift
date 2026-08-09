@@ -28,6 +28,7 @@ let package = Package(
         .testTarget(name: "JarvisCoreTests", dependencies: ["JarvisCore"]),
         .testTarget(name: "AgentVoiceTests", dependencies: ["AgentVoice"]),
         .testTarget(name: "AgentMotionTests", dependencies: ["AgentMotion"]),
-        .testTarget(name: "AgentLinkTests", dependencies: ["AgentLink"])
+        .testTarget(name: "AgentLinkTests", dependencies: ["AgentLink"]),
+        .testTarget(name: "AgentUITests", dependencies: ["AgentUI"])
     ]
 )
