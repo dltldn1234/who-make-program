@@ -22,7 +22,7 @@ let package = Package(
         .target(name: "AgentVoice"),
         .target(name: "AgentMotion"),
         .target(name: "AgentLink"),
-        .target(name: "AgentUI", dependencies: ["JarvisCore", "AgentVoice", "AgentMotion"]),
+        .target(name: "AgentUI", dependencies: ["JarvisCore", "AgentVoice", "AgentMotion", "AgentLink"]),
         .executableTarget(name: "JarvisCLI", dependencies: ["JarvisCore"]),
         .executableTarget(name: "JarvisHUD", dependencies: ["AgentUI"]),
         .testTarget(name: "JarvisCoreTests", dependencies: ["JarvisCore"]),

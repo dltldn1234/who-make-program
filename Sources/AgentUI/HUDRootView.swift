@@ -1,5 +1,6 @@
 import SwiftUI
 import JarvisCore
+import AgentLink
 import AgentVoice
 import AgentMotion
 
@@ -11,6 +12,7 @@ public struct HUDRootView: View {
     @State private var showingApproval = false
     @StateObject private var voice = VoiceInteractionController()
     @StateObject private var motion = HeadphoneMotionController()
+    @StateObject private var link = AgentLinkServer(name: Host.current().localizedName ?? "Agent Mac")
 
     private let engine = JarvisEngine(executor: MacActionExecutor())
 
@@ -61,7 +63,12 @@ public struct HUDRootView: View {
                 submitCommand(transcript)
             }
             motion.onGesture = handleHeadGesture
+            link.onCommand = { remoteCommand in
+                submitCommand(remoteCommand)
+            }
+            link.start()
         }
+        .onDisappear(perform: link.stop)
         .onChange(of: voice.state) { _, state in
             synchronizeVoiceState(state)
         }
@@ -84,11 +91,24 @@ public struct HUDRootView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("AGENT // HOLOGRAPHIC CORE")
                     .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                Text("LOCAL SYSTEM · SECURE CHANNEL")
+                Text("LOCAL LINK · APPROVAL GATED")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.cyan.opacity(0.55))
             }
             Spacer()
+            if case let .advertising(code) = link.state {
+                Text("PAIR \(code)")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(.cyan.opacity(0.08), in: Capsule())
+                    .overlay(Capsule().stroke(.cyan.opacity(0.35)))
+                    .help("iPhone Agent에 입력할 페어링 코드")
+            } else if case let .connected(peerName) = link.state {
+                Label(peerName, systemImage: "iphone.radiowaves.left.and.right")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.green)
+            }
             Button(action: motion.toggle) {
                 HStack(spacing: 6) {
                     Image(systemName: "airpodspro")
