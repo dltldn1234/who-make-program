@@ -109,7 +109,6 @@ public final class AgentLinkServer: ObservableObject {
             parameters.includePeerToPeer = true
             let listener = try NWListener(using: parameters)
             listener.service = NWListener.Service(name: identity.name, type: AgentLinkService.type)
-            listener.newConnectionLimit = 1
             listener.stateUpdateHandler = { [weak self] listenerState in
                 Task { @MainActor [weak self] in
                     self?.handleListenerState(listenerState)
