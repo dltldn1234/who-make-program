@@ -80,7 +80,7 @@ private struct HolographicCodeParticleLayer: View {
     let rotation: CGSize
     let reduceMotion: Bool
 
-    private let particles = HolographicCodeParticle.makeCloud(count: 520)
+    private let particles = HolographicCodeParticle.makeCloud(count: 180)
 
     var body: some View {
         TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1 / 30)) { timeline in
@@ -107,16 +107,21 @@ private struct HolographicCodeParticleLayer: View {
                 }.sorted { $0.depth < $1.depth }
 
                 for particle in projected {
-                    let visibility = 0.08 + pow(particle.depth, 1.9) * 0.86
+                    let visibility = 0.04 + pow(particle.depth, 2.2) * 0.48
                     let cold = Color(red: 0.06, green: 0.82, blue: 1)
                     let hot = Color(red: 1, green: 0.27, blue: 0.04)
                     let color = cold.mix(with: hot, by: Double(phase.thermalShift))
-                    context.draw(
-                        Text(particle.token)
-                            .font(.system(size: particle.fontSize, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(color.opacity(visibility)),
-                        at: particle.point,
-                        anchor: .center
+                    let length = 1.8 + particle.depth * 5.2 + max(Double(dynamics.expansion), 0) * 7
+                    var streak = Path()
+                    streak.move(to: particle.point)
+                    streak.addLine(to: CGPoint(
+                        x: particle.point.x + cos(particle.angle) * length,
+                        y: particle.point.y + sin(particle.angle) * length
+                    ))
+                    context.stroke(
+                        streak,
+                        with: .color(color.opacity(visibility)),
+                        lineWidth: 0.45 + particle.depth * 0.9
                     )
                 }
             }
@@ -130,35 +135,25 @@ private struct CoreStatusReticle: View {
     let audioLevel: Float
 
     var body: some View {
-        VStack(spacing: 5) {
-            Text(phase.label.uppercased())
-                .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                .tracking(2.4)
-            Text(String(format: "ENERGY %03d", Int(min(max(audioLevel, 0), 1) * 100)))
-                .font(.system(size: 8, weight: .medium, design: .monospaced))
-                .opacity(0.52)
-        }
+        Text("\(phase.label.uppercased())  ·  \(String(format: "%03d", Int(min(max(audioLevel, 0), 1) * 100)))")
+            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+            .tracking(1.6)
         .foregroundStyle(phase == .thinking ? Color.orange : Color.cyan)
-        .padding(.horizontal, 13)
-        .padding(.vertical, 8)
-        .background(.black.opacity(0.34), in: Capsule())
-        .overlay(Capsule().stroke(.white.opacity(0.14), lineWidth: 0.6))
-        .offset(y: 54)
+        .opacity(0.7)
+        .offset(y: 74)
         .allowsHitTesting(false)
     }
 }
 
 private struct HolographicCodeParticle: Sendable {
-    let token: String
     let x: Double
     let y: Double
     let z: Double
 
     struct Projection {
-        let token: String
         let point: CGPoint
         let depth: Double
-        let fontSize: Double
+        let angle: Double
     }
 
     func projected(
@@ -175,29 +170,21 @@ private struct HolographicCodeParticle: Sendable {
         let perspective = 0.7 + (pitchedZ + 1) * 0.18
 
         return Projection(
-            token: token,
             point: CGPoint(
                 x: center.x + yawX * radius * perspective,
                 y: center.y + pitchedY * radius * perspective
             ),
             depth: depth,
-            fontSize: 2.6 + pow(depth, 1.45) * 5.8
+            angle: atan2(pitchedY, yawX)
         )
     }
 
     static func makeCloud(count: Int) -> [Self] {
-        let tokens = [
-            "func", "let", "var", "async", "await", "NEURAL", "CORE", "0101",
-            "{}", "[]", "<LINK>", "SWIFT", "NODE", "VOICE", "TLS", "0xAF",
-            "if", "else", "return", "true", "false", "//SYS", "MATRIX", "ONLINE"
-        ]
-
         return (0..<count).map { index in
             let sample = Double(index) + 0.5
             let phi = acos(1 - 2 * sample / Double(count))
             let theta = .pi * (1 + sqrt(5)) * sample
             return Self(
-                token: tokens[index % tokens.count],
                 x: sin(phi) * cos(theta),
                 y: cos(phi),
                 z: sin(phi) * sin(theta)
