@@ -59,6 +59,10 @@ public struct AgentLinkCodec: Sendable {
             guard !command.isEmpty, command.count <= 1_000 else {
                 throw AgentLinkValidationError.invalidCommand
             }
+        case let .trustEstablished(_, credential):
+            guard credential.secret.count == 32 else {
+                throw AgentLinkSecurityError.invalidCredential
+            }
         default:
             break
         }
