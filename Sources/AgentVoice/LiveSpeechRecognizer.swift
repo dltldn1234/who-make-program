@@ -69,7 +69,7 @@ public final class LiveSpeechRecognizer {
             }
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: 1_024, format: format) { [weak self] buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: 1_024, format: format) { @Sendable [weak self] buffer, _ in
             request.append(buffer)
 
             guard let channel = buffer.floatChannelData?.pointee else { return }
