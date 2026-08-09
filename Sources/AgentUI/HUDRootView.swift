@@ -38,8 +38,8 @@ public struct HUDRootView: View {
 
                 CodeSphere(mode: mode, audioEnergy: voice.audioLevel)
                     .frame(
-                        width: min(geometry.size.width * 0.68, geometry.size.height * 0.84),
-                        height: min(geometry.size.width * 0.68, geometry.size.height * 0.84)
+                        width: min(geometry.size.width * 0.76, geometry.size.height * 0.92),
+                        height: min(geometry.size.width * 0.76, geometry.size.height * 0.92)
                     )
                     .offset(y: -14)
 
@@ -291,19 +291,21 @@ private struct AudioEnergyBar: View {
 private struct CodeSphere: View {
     let mode: CoreMode
     let audioEnergy: Float
-    private let particles = CodeParticle.makeCloud(count: 1_120)
+    private let particles = CodeParticle.makeCloud(count: 640)
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
             Canvas { context, size in
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                let baseRadius = min(size.width, size.height) * 0.39
-                let reactivePulse = mode == .listening ? Double(audioEnergy) * 0.13 : 0
+                let baseRadius = min(size.width, size.height) * 0.34
+                let reactivePulse = mode == .listening ? Double(audioEnergy) * 0.035 : 0
                 let pulse = 1 + sin(time * (mode == .speaking ? 7 : 2.2)) * mode.pulse + reactivePulse
                 let angle = time * mode.speed
 
+                drawAtmosphere(in: &context, center: center, radius: baseRadius, time: time)
                 drawGlow(in: &context, center: center, radius: baseRadius * pulse)
+                drawWireframe(in: &context, center: center, radius: baseRadius * pulse, time: time)
                 drawEnergyShell(in: &context, center: center, radius: baseRadius, time: time)
                 drawRings(in: &context, center: center, radius: baseRadius, time: time)
 
@@ -312,22 +314,30 @@ private struct CodeSphere: View {
                 }.sorted { $0.depth < $1.depth }
 
                 for particle in projected {
-                    let depthLight = 0.08 + particle.depth * 0.88
+                    let depthLight = 0.05 + pow(particle.depth, 1.7) * 0.94
                     let text = Text(particle.token)
                         .font(.system(size: particle.fontSize, weight: .medium, design: .monospaced))
-                        .foregroundStyle(Color.cyan.opacity(depthLight))
+                        .foregroundStyle(Color(red: 0.15, green: 0.9, blue: 1).opacity(depthLight))
                     context.draw(text, at: particle.point, anchor: .center)
                 }
 
+                drawEnergyWave(in: &context, center: center, radius: baseRadius, time: time)
+
+                let coreRadius = 28 + Double(audioEnergy) * 14
                 let core = Path(ellipseIn: CGRect(
-                    x: center.x - 18, y: center.y - 18,
-                    width: 36, height: 36
+                    x: center.x - coreRadius, y: center.y - coreRadius,
+                    width: coreRadius * 2, height: coreRadius * 2
                 ))
                 context.fill(core, with: .radialGradient(
-                    Gradient(colors: [.white, .cyan, .cyan.opacity(0)]),
+                    Gradient(stops: [
+                        .init(color: .white, location: 0),
+                        .init(color: .cyan, location: 0.18),
+                        .init(color: .blue.opacity(0.56), location: 0.48),
+                        .init(color: .clear, location: 1)
+                    ]),
                     center: center,
                     startRadius: 0,
-                    endRadius: 24
+                    endRadius: coreRadius
                 ))
 
                 let status = Text(mode.label.uppercased())
@@ -337,6 +347,95 @@ private struct CodeSphere: View {
             }
         }
         .accessibilityLabel("코드 입자로 이루어진 홀로그램 에이전트 코어")
+    }
+
+    private func drawAtmosphere(
+        in context: inout GraphicsContext,
+        center: CGPoint,
+        radius: Double,
+        time: Double
+    ) {
+        let breathing = 1 + sin(time * 1.25) * 0.025
+        let haloRadius = radius * 1.48 * breathing
+        let rect = CGRect(
+            x: center.x - haloRadius,
+            y: center.y - haloRadius,
+            width: haloRadius * 2,
+            height: haloRadius * 2
+        )
+        context.fill(Path(ellipseIn: rect), with: .radialGradient(
+            Gradient(stops: [
+                .init(color: .cyan.opacity(0.1), location: 0),
+                .init(color: .blue.opacity(0.045), location: 0.52),
+                .init(color: .cyan.opacity(0.018), location: 0.78),
+                .init(color: .clear, location: 1)
+            ]),
+            center: center,
+            startRadius: 0,
+            endRadius: haloRadius
+        ))
+    }
+
+    private func drawWireframe(
+        in context: inout GraphicsContext,
+        center: CGPoint,
+        radius: Double,
+        time: Double
+    ) {
+        for latitude in -4...4 {
+            let normalized = Double(latitude) / 5
+            let horizontalRadius = radius * sqrt(1 - normalized * normalized)
+            let y = center.y + normalized * radius
+            let rect = CGRect(
+                x: center.x - horizontalRadius,
+                y: y - horizontalRadius * 0.13,
+                width: horizontalRadius * 2,
+                height: horizontalRadius * 0.26
+            )
+            context.stroke(
+                Path(ellipseIn: rect),
+                with: .color(.cyan.opacity(latitude == 0 ? 0.32 : 0.13)),
+                style: StrokeStyle(lineWidth: latitude == 0 ? 1.1 : 0.55, dash: [1.5, 5], dashPhase: time * 5)
+            )
+        }
+
+        for longitude in 0..<7 {
+            var layer = context
+            layer.translateBy(x: center.x, y: center.y)
+            layer.rotate(by: .radians(Double(longitude) * .pi / 7 + time * 0.018))
+            let rect = CGRect(x: -radius * 0.27, y: -radius, width: radius * 0.54, height: radius * 2)
+            layer.stroke(
+                Path(ellipseIn: rect),
+                with: .color(.cyan.opacity(0.14)),
+                style: StrokeStyle(lineWidth: 0.65, dash: [2, 7], dashPhase: -time * 4)
+            )
+        }
+    }
+
+    private func drawEnergyWave(
+        in context: inout GraphicsContext,
+        center: CGPoint,
+        radius: Double,
+        time: Double
+    ) {
+        let energy = mode == .listening ? max(Double(audioEnergy), 0.08) : 0.08
+        var wave = Path()
+        let width = radius * 1.72
+        let segments = 90
+
+        for index in 0...segments {
+            let progress = Double(index) / Double(segments)
+            let x = center.x - width / 2 + width * progress
+            let envelope = sin(progress * .pi)
+            let y = center.y + sin(progress * 18 * .pi - time * 9) * energy * 23 * envelope
+            if index == 0 { wave.move(to: CGPoint(x: x, y: y)) }
+            else { wave.addLine(to: CGPoint(x: x, y: y)) }
+        }
+
+        var glow = context
+        glow.addFilter(.blur(radius: 5))
+        glow.stroke(wave, with: .color(.cyan.opacity(0.5)), lineWidth: 4)
+        context.stroke(wave, with: .color(.white.opacity(0.72)), lineWidth: 0.8)
     }
 
     private func drawGlow(in context: inout GraphicsContext, center: CGPoint, radius: Double) {
@@ -360,8 +459,8 @@ private struct CodeSphere: View {
         time: Double
     ) {
         for index in 0..<5 {
-            let inset = Double(index) * 3.5
-            let shellRadius = radius + 7 - inset
+            let inset = Double(index) * 4.5
+            let shellRadius = radius + 10 - inset
             let rect = CGRect(
                 x: center.x - shellRadius,
                 y: center.y - shellRadius,
@@ -370,9 +469,9 @@ private struct CodeSphere: View {
             )
             context.stroke(
                 Path(ellipseIn: rect),
-                with: .color(.cyan.opacity(0.2 - Double(index) * 0.025)),
+                with: .color(.cyan.opacity(0.31 - Double(index) * 0.045)),
                 style: StrokeStyle(
-                    lineWidth: index == 0 ? 2.2 : 0.7,
+                    lineWidth: index == 0 ? 2.6 : 0.75,
                     dash: [2, Double(5 + index * 3)],
                     dashPhase: time * Double(index + 1) * 9
                 )
@@ -393,6 +492,20 @@ private struct CodeSphere: View {
             rotation: -0.72 + time * 0.05,
             opacity: 0.31
         )
+
+        let scannerY = center.y + sin(time * 0.9) * radius * 0.72
+        let scannerWidth = sqrt(max(0, 1 - pow((scannerY - center.y) / radius, 2))) * radius
+        let scanner = Path(CGRect(
+            x: center.x - scannerWidth,
+            y: scannerY - 1,
+            width: scannerWidth * 2,
+            height: 2
+        ))
+        context.fill(scanner, with: .linearGradient(
+            Gradient(colors: [.clear, .cyan.opacity(0.75), .white, .cyan.opacity(0.75), .clear]),
+            startPoint: CGPoint(x: center.x - scannerWidth, y: scannerY),
+            endPoint: CGPoint(x: center.x + scannerWidth, y: scannerY)
+        ))
     }
 
     private func drawOrbitalPlane(
@@ -415,19 +528,19 @@ private struct CodeSphere: View {
 
     private func drawRings(in context: inout GraphicsContext, center: CGPoint, radius: Double, time: Double) {
         for index in 0..<3 {
-            let ringRadius = radius * (1.08 + Double(index) * 0.08)
+            let ringRadius = radius * (1.16 + Double(index) * 0.12)
             let rect = CGRect(
                 x: center.x - ringRadius,
                 y: center.y - ringRadius * 0.36,
                 width: ringRadius * 2,
-                height: ringRadius * 0.72
+                height: ringRadius * (index == 0 ? 0.48 : 0.62)
             )
             var ring = Path(ellipseIn: rect)
             let dashPhase = time * Double(index + 1) * 12
             context.stroke(
                 ring,
-                with: .color(.cyan.opacity(0.34 - Double(index) * 0.06)),
-                style: StrokeStyle(lineWidth: 1.2, dash: [3, 8], dashPhase: dashPhase)
+                with: .color(.cyan.opacity(0.48 - Double(index) * 0.09)),
+                style: StrokeStyle(lineWidth: index == 0 ? 1.8 : 1.05, dash: [3, 8], dashPhase: dashPhase)
             )
             ring = Path(ellipseIn: rect.insetBy(dx: ringRadius * 0.04, dy: ringRadius * 0.014))
             context.stroke(ring, with: .color(.cyan.opacity(0.08)), lineWidth: 1)
@@ -459,15 +572,15 @@ private struct CodeParticle: Sendable {
                 y: center.y + y * radius * perspective
             ),
             depth: (rotatedZ + 1) / 2,
-            fontSize: 2.4 + (rotatedZ + 1) * 1.9
+            fontSize: 2.8 + pow((rotatedZ + 1) / 2, 1.4) * 5.4
         )
     }
 
     static func makeCloud(count: Int) -> [CodeParticle] {
         let tokens = [
-            "func", "let", "var", "async", "await", "AI", "CORE", "0101",
-            "{}", "[]", "<>__", "swift", "node", "voice", "secure", "0xAF",
-            "if", "else", "return", "true", "false", "//", "SYS", "LINK"
+            "func", "let", "var", "async", "await", "NEURAL", "CORE", "0101",
+            "{}", "[]", "<LINK>", "SWIFT", "NODE", "VOICE", "SECURE", "0xAF",
+            "if", "else", "return", "true", "false", "//SYS", "MATRIX", "ONLINE"
         ]
 
         return (0..<count).map { index in
