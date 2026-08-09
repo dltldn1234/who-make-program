@@ -31,7 +31,7 @@ struct CompanionHomeView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("AGENT // MOBILE LINK")
                     .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                Text("PAIRING-PROTECTED LOCAL SESSION")
+                Text("TLS 1.3 // KEYCHAIN TRUST")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.cyan.opacity(0.55))
             }

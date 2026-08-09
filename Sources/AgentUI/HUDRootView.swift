@@ -91,7 +91,7 @@ public struct HUDRootView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("AGENT // HOLOGRAPHIC CORE")
                     .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                Text("LOCAL LINK · APPROVAL GATED")
+                Text("TLS 1.3 LINK · APPROVAL GATED")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.cyan.opacity(0.55))
             }
