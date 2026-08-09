@@ -4,6 +4,8 @@ import SwiftUI
 
 @main
 struct AgentMacApp: App {
+    @NSApplicationDelegateAdaptor(AgentMacDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup(id: "main") {
             HUDRootView()
@@ -16,6 +18,30 @@ struct AgentMacApp: App {
             AgentMenuBarView()
         }
         .menuBarExtraStyle(.menu)
+    }
+}
+
+private final class AgentMacDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApplication.shared.setActivationPolicy(.regular)
+        restoreMainWindow()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            restoreMainWindow()
+        }
+        return true
+    }
+
+    private func restoreMainWindow() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            guard let window = NSApplication.shared.windows.first(where: { $0.canBecomeMain }) else {
+                return
+            }
+            window.makeKeyAndOrderFront(nil)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
     }
 }
 
