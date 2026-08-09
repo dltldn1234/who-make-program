@@ -40,7 +40,7 @@ public struct HUDRootView: View {
                 .padding(.top, 90)
                 .padding(.bottom, 130)
 
-                CodeSphere(mode: mode, audioEnergy: voice.audioLevel)
+                HolographicCoreView(phase: mode, audioLevel: voice.audioLevel)
                     .frame(
                         width: min(geometry.size.width * 0.76, geometry.size.height * 0.92),
                         height: min(geometry.size.width * 0.76, geometry.size.height * 0.92)
