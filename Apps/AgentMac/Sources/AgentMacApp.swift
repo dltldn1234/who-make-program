@@ -13,6 +13,7 @@ struct AgentMacApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 760)
+        .defaultLaunchBehavior(.presented)
 
         MenuBarExtra("Agent", systemImage: "circle.hexagongrid.fill") {
             AgentMenuBarView()
