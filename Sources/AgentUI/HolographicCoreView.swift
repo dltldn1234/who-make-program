@@ -80,7 +80,7 @@ private struct HolographicCodeParticleLayer: View {
     let rotation: CGSize
     let reduceMotion: Bool
 
-    private let particles = HolographicCodeParticle.makeCloud(count: 180)
+    private let sparks = ReactorSpark.makeField(count: 220)
 
     var body: some View {
         TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1 / 30)) { timeline in
@@ -93,35 +93,33 @@ private struct HolographicCodeParticleLayer: View {
                 )
                 let radius = min(size.width, size.height) * 0.285 * Double(dynamics.scale)
                 let elapsed = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
-                let yaw = elapsed * Double(phase.rotationSpeed) + rotation.width / 260
-                let pitch = rotation.height / 360
                 let spread = 1 + max(Double(dynamics.expansion), 0) * 0.62
+                let rotationOffset = rotation.width / 520
 
-                let projected = particles.map {
-                    $0.projected(
-                        yaw: yaw,
-                        pitch: pitch,
-                        center: center,
-                        radius: radius * spread
+                for spark in sparks {
+                    let progress = spark.progress(at: elapsed, energy: Double(dynamics.energy))
+                    let angle = spark.angle + rotationOffset
+                    let travel = radius * (0.98 + spark.reach * progress * spread)
+                    let point = CGPoint(
+                        x: center.x + cos(angle) * travel,
+                        y: center.y + sin(angle) * travel
                     )
-                }.sorted { $0.depth < $1.depth }
-
-                for particle in projected {
-                    let visibility = 0.04 + pow(particle.depth, 2.2) * 0.48
+                    let fade = pow(1 - progress, 1.65)
+                    let visibility = spark.brightness * fade
                     let cold = Color(red: 0.06, green: 0.82, blue: 1)
                     let hot = Color(red: 1, green: 0.27, blue: 0.04)
                     let color = cold.mix(with: hot, by: Double(phase.thermalShift))
-                    let length = 1.8 + particle.depth * 5.2 + max(Double(dynamics.expansion), 0) * 7
+                    let length = 2.2 + spark.length * (1 + Double(dynamics.energy) * 1.8)
                     var streak = Path()
-                    streak.move(to: particle.point)
+                    streak.move(to: point)
                     streak.addLine(to: CGPoint(
-                        x: particle.point.x + cos(particle.angle) * length,
-                        y: particle.point.y + sin(particle.angle) * length
+                        x: point.x + cos(angle) * length,
+                        y: point.y + sin(angle) * length
                     ))
                     context.stroke(
                         streak,
                         with: .color(color.opacity(visibility)),
-                        lineWidth: 0.45 + particle.depth * 0.9
+                        lineWidth: 0.45 + spark.width
                     )
                 }
             }
@@ -145,49 +143,34 @@ private struct CoreStatusReticle: View {
     }
 }
 
-private struct HolographicCodeParticle: Sendable {
-    let x: Double
-    let y: Double
-    let z: Double
+private struct ReactorSpark: Sendable {
+    let angle: Double
+    let reach: Double
+    let speed: Double
+    let phase: Double
+    let length: Double
+    let width: Double
+    let brightness: Double
 
-    struct Projection {
-        let point: CGPoint
-        let depth: Double
-        let angle: Double
+    func progress(at time: TimeInterval, energy: Double) -> Double {
+        let rate = speed * (0.55 + energy * 1.25)
+        return (time * rate + phase).truncatingRemainder(dividingBy: 1)
     }
 
-    func projected(
-        yaw: Double,
-        pitch: Double,
-        center: CGPoint,
-        radius: Double
-    ) -> Projection {
-        let yawX = x * cos(yaw) - z * sin(yaw)
-        let yawZ = x * sin(yaw) + z * cos(yaw)
-        let pitchedY = y * cos(pitch) - yawZ * sin(pitch)
-        let pitchedZ = y * sin(pitch) + yawZ * cos(pitch)
-        let depth = (pitchedZ + 1) / 2
-        let perspective = 0.7 + (pitchedZ + 1) * 0.18
-
-        return Projection(
-            point: CGPoint(
-                x: center.x + yawX * radius * perspective,
-                y: center.y + pitchedY * radius * perspective
-            ),
-            depth: depth,
-            angle: atan2(pitchedY, yawX)
-        )
-    }
-
-    static func makeCloud(count: Int) -> [Self] {
+    static func makeField(count: Int) -> [Self] {
         return (0..<count).map { index in
-            let sample = Double(index) + 0.5
-            let phi = acos(1 - 2 * sample / Double(count))
-            let theta = .pi * (1 + sqrt(5)) * sample
+            let seed = Double(index) + 0.5
+            let angle = seed * .pi * (3 - sqrt(5))
+            let variation = abs(sin(seed * 91.733))
+            let secondary = abs(sin(seed * 47.117 + 0.7))
             return Self(
-                x: sin(phi) * cos(theta),
-                y: cos(phi),
-                z: sin(phi) * sin(theta)
+                angle: angle,
+                reach: 0.18 + variation * 0.72,
+                speed: 0.12 + secondary * 0.34,
+                phase: variation,
+                length: 1.5 + variation * 6.5,
+                width: 0.2 + secondary * 0.75,
+                brightness: 0.08 + variation * 0.48
             )
         }
     }
