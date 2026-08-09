@@ -4,7 +4,7 @@ import SwiftUI
 struct CompanionHomeView: View {
     @State private var pairingCode = ""
     @State private var command = ""
-    @State private var connectionState = ConnectionState.searching
+    @StateObject private var link = AgentLinkClient(name: UIDevice.current.name)
 
     var body: some View {
         ZStack {
@@ -19,8 +19,11 @@ struct CompanionHomeView: View {
                 Spacer(minLength: 0)
             }
             .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .foregroundStyle(.cyan)
+        .onAppear(perform: link.start)
+        .onDisappear(perform: link.stop)
     }
 
     private var header: some View {
@@ -28,15 +31,15 @@ struct CompanionHomeView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("AGENT // MOBILE LINK")
                     .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                Text("ENCRYPTED LOCAL SESSION")
+                Text("PAIRING-PROTECTED LOCAL SESSION")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.cyan.opacity(0.55))
             }
             Spacer()
             Circle()
-                .fill(connectionState.color)
+                .fill(link.state.color)
                 .frame(width: 8, height: 8)
-                .shadow(color: connectionState.color, radius: 6)
+                .shadow(color: link.state.color, radius: 6)
         }
     }
 
@@ -53,7 +56,7 @@ struct CompanionHomeView: View {
             VStack(spacing: 4) {
                 Image(systemName: "macbook.and.iphone")
                     .font(.system(size: 22))
-                Text(connectionState.label)
+                Text(link.state.label)
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
             }
         }
@@ -76,7 +79,7 @@ struct CompanionHomeView: View {
                     pairingCode = String(value.filter(\.isNumber).prefix(6))
                 }
             Button("MAC과 페어링") {
-                connectionState = pairingCode.count == 6 ? .ready : .invalidCode
+                link.pair(code: pairingCode)
             }
             .buttonStyle(LinkButtonStyle())
             .disabled(pairingCode.count != 6)
@@ -92,13 +95,14 @@ struct CompanionHomeView: View {
                 TextField("연결 후 명령 입력", text: $command)
                     .textFieldStyle(.plain)
                 Button {
+                    link.sendCommand(command.trimmingCharacters(in: .whitespacesAndNewlines))
                     command = ""
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 26))
                 }
                 .buttonStyle(.plain)
-                .disabled(connectionState != .ready || command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!link.state.isConnected || command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(14)
             .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
@@ -108,25 +112,29 @@ struct CompanionHomeView: View {
     }
 }
 
-private enum ConnectionState {
-    case searching
-    case ready
-    case invalidCode
-
+private extension AgentLinkConnectionState {
     var label: String {
         switch self {
+        case .idle: "LINK OFFLINE"
         case .searching: "SEARCHING FOR MAC"
-        case .ready: "SECURE LINK READY"
-        case .invalidCode: "INVALID CODE"
+        case .advertising: "ADVERTISING"
+        case .connecting: "CONNECTING"
+        case .pairing: "AWAITING PAIRING CODE"
+        case .connected: "LOCAL LINK READY"
+        case .failed: "CONNECTION FAILED"
         }
     }
 
     var color: Color {
         switch self {
-        case .searching: .orange
-        case .ready: .cyan
-        case .invalidCode: .red
+        case .idle, .searching, .connecting, .pairing, .advertising: .orange
+        case .connected: .cyan
+        case .failed: .red
         }
+    }
+
+    var isConnected: Bool {
+        if case .connected = self { true } else { false }
     }
 }
 

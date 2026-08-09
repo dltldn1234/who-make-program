@@ -20,6 +20,8 @@ let project = Project(
                     "NSCameraUsageDescription": "손동작으로 홀로그램 인터페이스를 제어하기 위해 카메라를 사용합니다.",
                     "NSMicrophoneUsageDescription": "음성 명령을 듣고 처리하기 위해 마이크를 사용합니다.",
                     "NSMotionUsageDescription": "지원되는 AirPods의 머리 움직임을 명령 승인과 제어에 사용합니다.",
+                    "NSLocalNetworkUsageDescription": "iPhone의 Agent와 연결하고 명령을 받기 위해 로컬 네트워크를 사용합니다.",
+                    "NSBonjourServices": ["_agent-link._tcp"],
                     "NSSpeechRecognitionUsageDescription": "음성 명령을 기기에서 텍스트로 변환하기 위해 음성 인식을 사용합니다.",
                 ]
             ),
