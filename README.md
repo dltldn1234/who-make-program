@@ -16,15 +16,19 @@ Mac을 주 실행 본체로 사용하고 향후 iPhone과 AirPods를 연결하�
 - 코드 입자 1,120개로 구성된 홀로그램 코어 HUD
 - 대기, 듣기, 분석, 응답 상태 애니메이션
 - 네이티브 macOS 창과 메뉴바 진입점
+- 네이티브 iPhone 동반 앱과 6자리 페어링 화면
+- Mac·iPhone이 공유하는 버전 기반 메시지 프로토콜
 - 명령 해석 및 정책 테스트
 
 ## 모듈 구조
 
 ```text
 Apps/AgentMac        정식 macOS 앱과 메뉴바 진입점
+Apps/AgentPhone      iPhone 페어링과 원격 명령 인터페이스
 Sources/JarvisCore   플랫폼과 UI에 독립적인 명령·승인·실행 코어
 Sources/AgentVoice  권한·마이크 입력·음성 인식·음성 합성 계층
 Sources/AgentMotion AirPods 자세 스트림과 머리 제스처 판정 계층
+Sources/AgentLink   Mac·iPhone 메시지 모델과 검증 코덱
 Sources/AgentUI      재사용 가능한 SwiftUI 홀로그램 HUD
 Sources/JarvisCLI    코어를 빠르게 검증하는 터미널 클라이언트
 Sources/JarvisHUD    SwiftPM HUD 프로토타입 실행기
@@ -42,6 +46,8 @@ open Agent.xcworkspace
 ```
 
 Xcode에서 `AgentMac` 스킴과 `My Mac` 실행 대상을 선택합니다. 생성된 `.xcodeproj`와 `.xcworkspace`는 로컬 산출물이므로 Git에 커밋하지 않습니다.
+
+iPhone 화면은 `AgentPhone` 스킴과 iPhone 시뮬레이터 또는 실제 기기를 선택해 실행합니다. 현재 단계에서는 페어링·명령 UI와 통신 프로토콜을 검증하며, 실제 Mac 탐색과 암호화 세션 전송은 다음 네트워크 단계에서 연결합니다.
 
 명령행 빌드:
 
@@ -81,4 +87,4 @@ git diff --check
 - 음성, 손동작, AirPods, iPhone은 동일한 명령 코어에 입력 어댑터로 연결합니다.
 - 마이크와 카메라 같은 민감한 권한은 해당 기능을 처음 사용할 때 요청합니다.
 
-다음 단계는 iPhone 동반 앱과 Mac 사이의 인증된 로컬 세션을 구성하는 것입니다.
+다음 단계는 Network.framework를 사용해 iPhone 동반 앱과 Mac 사이의 Bonjour 탐색 및 인증된 로컬 세션을 구성하는 것입니다.
