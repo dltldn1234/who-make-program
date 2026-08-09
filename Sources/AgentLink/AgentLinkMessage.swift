@@ -20,6 +20,8 @@ public struct AgentDeviceIdentity: Codable, Equatable, Sendable {
 public enum AgentLinkMessage: Codable, Equatable, Sendable {
     case pairingRequest(device: AgentDeviceIdentity, code: String)
     case pairingAccepted(device: AgentDeviceIdentity)
+    case trustEstablished(device: AgentDeviceIdentity, credential: AgentLinkCredential)
+    case trustedSession(device: AgentDeviceIdentity)
     case command(text: String)
     case approval(id: UUID, approved: Bool)
     case status(state: String)
