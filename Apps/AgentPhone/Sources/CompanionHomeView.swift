@@ -19,6 +19,7 @@ struct CompanionHomeView: View {
                 Spacer(minLength: 0)
             }
             .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .foregroundStyle(.cyan)
         .onAppear(perform: link.start)
