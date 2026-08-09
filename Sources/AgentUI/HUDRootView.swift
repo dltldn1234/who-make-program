@@ -1,6 +1,7 @@
 import SwiftUI
 import JarvisCore
 import AgentVoice
+import AgentMotion
 
 public struct HUDRootView: View {
     @State private var mode: CoreMode = .idle
@@ -9,6 +10,7 @@ public struct HUDRootView: View {
     @State private var pendingCommand: PreparedCommand?
     @State private var showingApproval = false
     @StateObject private var voice = VoiceInteractionController()
+    @StateObject private var motion = HeadphoneMotionController()
 
     private let engine = JarvisEngine(executor: MacActionExecutor())
 
@@ -58,6 +60,7 @@ public struct HUDRootView: View {
             voice.onFinalTranscript = { transcript in
                 submitCommand(transcript)
             }
+            motion.onGesture = handleHeadGesture
         }
         .onChange(of: voice.state) { _, state in
             synchronizeVoiceState(state)
@@ -86,6 +89,15 @@ public struct HUDRootView: View {
                     .foregroundStyle(.cyan.opacity(0.55))
             }
             Spacer()
+            Button(action: motion.toggle) {
+                HStack(spacing: 6) {
+                    Image(systemName: "airpodspro")
+                    Text(motion.state.label)
+                }
+            }
+            .buttonStyle(HUDButtonStyle(selected: motion.state.isTracking))
+            .help("AirPods 머리 움직임 제어")
+
             Text(mode.label.uppercased())
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .padding(.horizontal, 12)
@@ -215,6 +227,23 @@ public struct HUDRootView: View {
         case let .failed(message):
             mode = .idle
             response = message
+        }
+    }
+
+    private func handleHeadGesture(_ gesture: HeadGesture) {
+        guard let pendingCommand, showingApproval else {
+            response = gesture == .nod ? "끄덕임 감지 · 승인 대기 명령 없음" : "좌우 움직임 감지 · 취소할 명령 없음"
+            return
+        }
+
+        showingApproval = false
+        switch gesture {
+        case .nod:
+            response = "끄덕임으로 명령 승인"
+            execute(pendingCommand, approved: true)
+        case .shake:
+            response = "좌우 움직임으로 명령 취소"
+            execute(pendingCommand, approved: false)
         }
     }
 }
