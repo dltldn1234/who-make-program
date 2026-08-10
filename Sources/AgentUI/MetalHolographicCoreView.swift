@@ -61,6 +61,7 @@ extension MetalHolographicCoreView {
             var rotationY: Float = 0
             var shockwave: Float = 1
             var turbulence: Float = 0
+            var ignition: Float = 1
         }
 
         let device: MTLDevice
@@ -74,6 +75,9 @@ extension MetalHolographicCoreView {
         private var rotation = CGSize.zero
         private var reduceMotion = false
         private var shockwaveStartedAt = CACurrentMediaTime() - 2
+        private var transitionStartedAt = CACurrentMediaTime() - 2
+        private var lastFrameAt = CACurrentMediaTime()
+        private var transitionState = HolographicCoreTransitionState()
 
         static func make() -> Renderer? {
             guard let device = MTLCreateSystemDefaultDevice(),
@@ -122,6 +126,7 @@ extension MetalHolographicCoreView {
             lock.lock()
             if self.phase != phase {
                 shockwaveStartedAt = CACurrentMediaTime()
+                transitionStartedAt = shockwaveStartedAt
             }
             self.phase = phase
             self.audioLevel = audioLevel
@@ -163,17 +168,27 @@ extension MetalHolographicCoreView {
             let now = CACurrentMediaTime()
             let elapsed = reduceMotion ? 0 : now - startedAt
             let shockwave = reduceMotion ? 1 : min(max((now - shockwaveStartedAt) / 1.15, 0), 1)
+            let deltaTime = now - lastFrameAt
+            lastFrameAt = now
+            transitionState.advance(
+                toward: phase,
+                targetEnergy: dynamics.energy,
+                deltaTime: deltaTime,
+                reduceMotion: reduceMotion
+            )
+            let ignition = reduceMotion ? 1 : min(max((now - transitionStartedAt) / 0.92, 0), 1)
 
             return Uniforms(
                 resolution: SIMD2(Float(size.width), Float(size.height)),
                 time: Float(elapsed) * phase.rotationSpeed,
-                thermalShift: phase.thermalShift,
-                energy: dynamics.energy,
+                thermalShift: transitionState.thermal,
+                energy: transitionState.energy,
                 expansion: dynamics.expansion,
                 rotationX: Float(rotation.height / 500),
                 rotationY: Float(rotation.width / 500),
                 shockwave: Float(shockwave),
-                turbulence: phase.turbulence
+                turbulence: transitionState.turbulence,
+                ignition: Float(ignition)
             )
         }
     }

@@ -16,6 +16,7 @@ enum HolographicMetalShader {
         float rotationY;
         float shockwave;
         float turbulence;
+        float ignition;
     };
 
     struct VertexOutput { float4 position [[position]]; float2 uv; };
@@ -89,8 +90,10 @@ enum HolographicMetalShader {
 
         // A broad, noisy corona preserves the heavy halo visible in both states.
         float outerDistance = r - radius - edgeWarp;
-        float outerBloom = glowLine(outerDistance, 0.028, 0.28);
-        float outerRing = glowLine(outerDistance, 0.012, 0.52);
+        float coronaArrival = smoothstep(0.34, 0.92, u.ignition);
+        float chamberArrival = smoothstep(0.08, 0.62, u.ignition);
+        float outerBloom = glowLine(outerDistance, 0.028, 0.28) * (0.56 + coronaArrival * 0.44);
+        float outerRing = glowLine(outerDistance, 0.012, 0.52) * (0.68 + coronaArrival * 0.32);
         float hotRim = smoothstep(0.075, 0.002, abs(outerDistance)) * (0.62 + grain * 1.05);
         float brokenArc = smoothstep(0.18, 0.82, noise(float2(angle * 8.0, floor(t * 10.0) * 0.07)));
         outerRing *= 0.56 + brokenArc;
@@ -118,12 +121,13 @@ enum HolographicMetalShader {
         // Layered plasma makes each chamber look molten without turning it into a ball.
         float plasmaVeins = pow(fbm(rotate2D(p, -spin * 0.65) * 9.0 + t * 0.22), 2.35);
         float microPlasma = smoothstep(0.52, 0.91, fbm(p * 17.0 - t * 0.24));
-        float chamberFill = disc * innerDisc * cells
+        float chamberFill = disc * innerDisc * cells * (0.62 + chamberArrival * 0.38)
             * (0.22 + plasmaVeins * 0.68 + microPlasma * (0.24 + u.energy * 0.42));
 
         // Compact white-hot center with a three-point flare, matching the ignition frame.
-        float hubCore = exp(-r * 30.0) * (1.55 + u.energy * 1.55);
-        float hubHalo = exp(-r * 13.0) * (0.42 + u.energy * 0.7);
+        float ignitionFlash = exp(-pow((u.ignition - 0.16) * 7.5, 2.0));
+        float hubCore = exp(-r * 30.0) * (1.55 + u.energy * 1.55 + ignitionFlash * 1.4);
+        float hubHalo = exp(-r * 13.0) * (0.42 + u.energy * 0.7 + ignitionFlash * 0.42);
         float hubStar = glowLine(abs(sin((angle - spin) * 1.5)) * r, 0.010, 0.055)
             * smoothstep(radius * 0.38, 0.0, r);
 
@@ -140,7 +144,7 @@ enum HolographicMetalShader {
         float sparkRadius = radius * (1.06 + sparkSeed * (0.48 + u.thermalShift * 0.48));
         float sparks = step(0.86 - u.energy * 0.12 - u.thermalShift * 0.09, sparkSeed)
             * glowLine(r - sparkRadius, 0.003, 0.018 + u.thermalShift * 0.018)
-            * smoothstep(0.997, 1.0, abs(sin(angle * 62.0)));
+            * smoothstep(0.997, 1.0, abs(sin(angle * 62.0))) * (0.35 + coronaArrival * 0.65);
 
         float waveRadius = mix(radius * 1.08, radius * 2.3, u.shockwave);
         float shockwave = glowLine(r - waveRadius, 0.006, 0.03) * (1.0 - u.shockwave);
