@@ -67,3 +67,38 @@ struct HolographicCoreDynamics: Equatable, Sendable {
         scale = 1 + energy * 0.08 + max(expansion, 0) * 0.16
     }
 }
+
+struct HolographicCoreTransitionState: Equatable, Sendable {
+    private(set) var thermal: Float = 0
+    private(set) var energy: Float = 0
+    private(set) var turbulence: Float = 0.18
+
+    mutating func advance(
+        toward phase: HolographicCorePhase,
+        targetEnergy: Float,
+        deltaTime: Double,
+        reduceMotion: Bool
+    ) {
+        guard !reduceMotion else {
+            thermal = phase.thermalShift
+            energy = targetEnergy
+            turbulence = phase.turbulence
+            return
+        }
+
+        let delta = Float(min(max(deltaTime, 0), 0.1))
+        thermal = approach(
+            thermal,
+            target: phase.thermalShift,
+            response: phase.thermalShift > thermal ? 5.8 : 1.7,
+            delta: delta
+        )
+        energy = approach(energy, target: targetEnergy, response: 8.5, delta: delta)
+        turbulence = approach(turbulence, target: phase.turbulence, response: 4.2, delta: delta)
+    }
+
+    private func approach(_ value: Float, target: Float, response: Float, delta: Float) -> Float {
+        let blend = 1 - exp(-response * delta)
+        return value + (target - value) * blend
+    }
+}

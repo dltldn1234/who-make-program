@@ -25,4 +25,27 @@ struct HolographicCorePhaseTests {
         #expect(compressed.expansion < 0)
         #expect(expanded.expansion == 1)
     }
+
+    @Test("Thermal transitions heat faster than they cool")
+    func asymmetricThermalResponse() {
+        var heating = HolographicCoreTransitionState()
+        heating.advance(toward: .thinking, targetEnergy: 1, deltaTime: 0.1, reduceMotion: false)
+
+        var cooling = HolographicCoreTransitionState()
+        cooling.advance(toward: .thinking, targetEnergy: 1, deltaTime: 1, reduceMotion: true)
+        cooling.advance(toward: .idle, targetEnergy: 0, deltaTime: 0.1, reduceMotion: false)
+
+        #expect(heating.thermal > 0.4)
+        #expect(cooling.thermal > 0.8)
+    }
+
+    @Test("Reduce Motion settles reactor state immediately")
+    func reducedMotionSettling() {
+        var state = HolographicCoreTransitionState()
+        state.advance(toward: .speaking, targetEnergy: 0.72, deltaTime: 0, reduceMotion: true)
+
+        #expect(state.thermal == HolographicCorePhase.speaking.thermalShift)
+        #expect(state.energy == 0.72)
+        #expect(state.turbulence == HolographicCorePhase.speaking.turbulence)
+    }
 }
