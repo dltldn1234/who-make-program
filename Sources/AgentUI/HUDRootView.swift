@@ -3,6 +3,10 @@ import JarvisCore
 import AgentLink
 import AgentVoice
 import AgentMotion
+#if os(macOS)
+import CoreImage.CIFilterBuiltins
+import AppKit
+#endif
 
 public struct HUDRootView: View {
     @State private var mode: HolographicCorePhase = .idle
@@ -10,6 +14,7 @@ public struct HUDRootView: View {
     @State private var response = "시스템 준비 완료"
     @State private var pendingCommand: PreparedCommand?
     @State private var showingApproval = false
+    @State private var showingPairingQR = false
     @StateObject private var voice = VoiceInteractionController()
     @StateObject private var motion = HeadphoneMotionController()
     @StateObject private var link = AgentLinkServer(name: Host.current().localizedName ?? "Agent Mac")
@@ -84,6 +89,11 @@ public struct HUDRootView: View {
                 Text(reason)
             }
         }
+        .sheet(isPresented: $showingPairingQR) {
+            if case let .advertising(code) = link.state {
+                PairingQRCodeView(code: code)
+            }
+        }
     }
 
     private var topBar: some View {
@@ -97,13 +107,18 @@ public struct HUDRootView: View {
             }
             Spacer()
             if case let .advertising(code) = link.state {
-                Text("PAIR \(code)")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(.cyan.opacity(0.08), in: Capsule())
-                    .overlay(Capsule().stroke(.cyan.opacity(0.35)))
-                    .help("iPhone Agent에 입력할 페어링 코드")
+                Button {
+                    showingPairingQR = true
+                } label: {
+                    Label("PAIR \(code)", systemImage: "qrcode")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(.cyan.opacity(0.08), in: Capsule())
+                        .overlay(Capsule().stroke(.cyan.opacity(0.35)))
+                }
+                .buttonStyle(.plain)
+                .help("QR 코드를 열어 iPhone Agent와 페어링")
             } else if case let .connected(peerName) = link.state {
                 Label(peerName, systemImage: "iphone.radiowaves.left.and.right")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -267,6 +282,58 @@ public struct HUDRootView: View {
         }
     }
 }
+
+#if os(macOS)
+private struct PairingQRCodeView: View {
+    let code: String
+    @Environment(\.dismiss) private var dismiss
+
+    private var qrImage: NSImage? {
+        guard let payload = AgentLinkPairingPayload.encode(code: code) else { return nil }
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(payload.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)) else {
+            return nil
+        }
+        let representation = NSCIImageRep(ciImage: output)
+        let image = NSImage(size: representation.size)
+        image.addRepresentation(representation)
+        return image
+    }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("SECURE DEVICE LINK")
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .tracking(2)
+            if let qrImage {
+                Image(nsImage: qrImage)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 260, height: 260)
+                    .padding(18)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 20))
+            }
+            Text("iPhone Agent에서 QR 스캔")
+                .font(.system(size: 12, design: .monospaced))
+            Text("PAIRING CODE  \(code)")
+                .font(.system(size: 15, weight: .bold, design: .monospaced))
+                .foregroundStyle(.cyan)
+            Text("같은 Wi-Fi에서만 연결되며 최초 연결 후 TLS 신뢰 키가 Keychain에 저장됩니다.")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 330)
+            Button("닫기", action: dismiss.callAsFunction)
+                .keyboardShortcut(.cancelAction)
+        }
+        .padding(28)
+        .frame(width: 400)
+        .background(Color(red: 0.002, green: 0.012, blue: 0.026))
+    }
+}
+#endif
 
 private struct HUDButtonStyle: ButtonStyle {
     let selected: Bool
