@@ -1,9 +1,11 @@
 import AgentLink
 import SwiftUI
+import VisionKit
 
 struct CompanionHomeView: View {
     @State private var pairingCode = ""
     @State private var command = ""
+    @State private var showingScanner = false
     @StateObject private var link = AgentLinkClient(name: UIDevice.current.name)
 
     var body: some View {
@@ -24,6 +26,13 @@ struct CompanionHomeView: View {
         .foregroundStyle(.cyan)
         .onAppear(perform: link.start)
         .onDisappear(perform: link.stop)
+        .fullScreenCover(isPresented: $showingScanner) {
+            PairingScannerView { code in
+                pairingCode = code
+                showingScanner = false
+                link.pair(code: code)
+            }
+        }
     }
 
     private var header: some View {
@@ -67,6 +76,13 @@ struct CompanionHomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("PAIRING CODE")
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
+            Button {
+                showingScanner = true
+            } label: {
+                Label("MAC QR 스캔", systemImage: "qrcode.viewfinder")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(LinkButtonStyle())
             TextField("Mac에 표시된 6자리 코드", text: $pairingCode)
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
@@ -109,6 +125,104 @@ struct CompanionHomeView: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(.cyan.opacity(0.2)))
         }
         .linkPanel()
+    }
+}
+
+private struct PairingScannerView: View {
+    let onCode: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
+                AgentQRCodeScanner(onCode: onCode)
+                    .ignoresSafeArea()
+            } else {
+                ContentUnavailableView(
+                    "QR 스캐너를 사용할 수 없음",
+                    systemImage: "camera.fill",
+                    description: Text("카메라를 사용할 수 있는 실제 iPhone에서 다시 시도해 주세요.")
+                )
+            }
+
+            VStack {
+                HStack {
+                    Button(action: dismiss.callAsFunction) {
+                        Image(systemName: "xmark")
+                            .font(.headline)
+                            .padding(12)
+                            .background(.black.opacity(0.65), in: Circle())
+                    }
+                    Spacer()
+                }
+                Spacer()
+                Text("Mac Agent에 표시된 QR 코드를 비춰주세요")
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(.black.opacity(0.72), in: Capsule())
+            }
+            .foregroundStyle(.white)
+            .padding(20)
+        }
+    }
+}
+
+private struct AgentQRCodeScanner: UIViewControllerRepresentable {
+    let onCode: (String) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onCode: onCode)
+    }
+
+    func makeUIViewController(context: Context) -> DataScannerViewController {
+        let controller = DataScannerViewController(
+            recognizedDataTypes: [.barcode(symbologies: [.qr])],
+            qualityLevel: .balanced,
+            recognizesMultipleItems: false,
+            isHighFrameRateTrackingEnabled: true,
+            isPinchToZoomEnabled: true,
+            isGuidanceEnabled: true,
+            isHighlightingEnabled: true
+        )
+        controller.delegate = context.coordinator
+        try? controller.startScanning()
+        return controller
+    }
+
+    func updateUIViewController(_ controller: DataScannerViewController, context: Context) {}
+
+    static func dismantleUIViewController(_ controller: DataScannerViewController, coordinator: Coordinator) {
+        controller.stopScanning()
+    }
+
+    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
+        private let onCode: (String) -> Void
+        private var completed = false
+
+        init(onCode: @escaping (String) -> Void) {
+            self.onCode = onCode
+        }
+
+        func dataScanner(
+            _ dataScanner: DataScannerViewController,
+            didAdd addedItems: [RecognizedItem],
+            allItems: [RecognizedItem]
+        ) {
+            guard !completed else { return }
+            for item in addedItems {
+                guard case let .barcode(barcode) = item,
+                      let payload = barcode.payloadStringValue,
+                      let code = AgentLinkPairingPayload.decode(payload) else {
+                    continue
+                }
+                completed = true
+                dataScanner.stopScanning()
+                onCode(code)
+                return
+            }
+        }
     }
 }
 
