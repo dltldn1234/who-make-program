@@ -26,6 +26,12 @@ struct CompanionHomeView: View {
         .foregroundStyle(.cyan)
         .onAppear(perform: link.start)
         .onDisappear(perform: link.stop)
+        .onOpenURL { url in
+            guard let code = AgentLinkPairingPayload.decode(url.absoluteString) else { return }
+            pairingCode = code
+            showingScanner = false
+            link.pair(code: code)
+        }
         .fullScreenCover(isPresented: $showingScanner) {
             PairingScannerView { code in
                 pairingCode = code
