@@ -40,6 +40,7 @@ Sources/AgentIntelligence OpenAI 대화 요청·응답과 런타임 보안 설�
 Sources/AgentUI      재사용 가능한 SwiftUI 홀로그램 HUD
 Sources/JarvisCLI    코어를 빠르게 검증하는 터미널 클라이언트
 Sources/JarvisHUD    SwiftPM HUD 프로토타입 실행기
+Server               개인 전용 인증·요청 제한·OpenAI 릴레이 서버
 Tests                코어 동작 테스트
 Project.swift        재현 가능한 Xcode 프로젝트 선언
 ```
@@ -97,8 +98,11 @@ open /path/to/AgentMac.app
 
 ```sh
 export JARVIS_AI_ENDPOINT="https://agent.example.com/v1/responses"
+export JARVIS_CLIENT_TOKEN="your-private-device-token"
 open /path/to/AgentMac.app
 ```
+
+저장소에는 의존성 없는 Node 기반 전용 서버가 포함되어 있습니다. 로컬 실행, Docker, 개인 VPN 및 HTTPS 배포 절차는 [Server/README.md](Server/README.md)를 따릅니다.
 
 기기 실행 명령은 AI로 보내지 않고 기존 `JarvisCore` 해석기와 사용자 승인 정책으로 처리합니다. AI가 임의의 셸 명령을 생성하거나 실행할 수는 없습니다.
 
