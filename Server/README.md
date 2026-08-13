@@ -64,3 +64,29 @@ curl -i http://127.0.0.1:8787/health
 ```
 
 서버는 대화 본문을 파일이나 데이터베이스에 저장하지 않으며 응답에 `Cache-Control: no-store`를 적용합니다. 장애 로그에도 사용자의 입력, 클라이언트 토큰, OpenAI 키를 기록하지 않습니다.
+
+## Mac 로그인 자동 실행
+
+Mac을 JARVIS의 상시 서버로 사용할 때 권장하는 설치 방식입니다.
+
+```sh
+cd Server
+./scripts/install-macos-service.sh
+```
+
+설치 프로그램이 OpenAI 프로젝트 API 키를 보이지 않는 입력창으로 받고, API 키와 새로 생성한 256비트 클라이언트 토큰을 로그인 Keychain에 저장합니다. `launchd`가 로그인 직후 서버를 시작하고 종료되면 자동 재시작합니다.
+
+AgentMac은 환경변수가 없을 때 같은 Keychain의 클라이언트 토큰을 찾아 `http://127.0.0.1:8787/v1/responses`에 자동 연결합니다. 첫 접근에서 macOS가 Keychain 사용 허용 여부를 물으면 AgentMac에 허용합니다. OpenAI API 키는 AgentMac이 읽지 않습니다.
+
+```sh
+curl http://127.0.0.1:8787/health
+launchctl print "gui/$(id -u)/com.dltldn1234.jarvis.server"
+tail -f "$HOME/Library/Logs/JarvisServer/server.error.log"
+```
+
+자동 실행과 저장된 서버 자격 증명을 제거하려면 다음을 실행합니다.
+
+```sh
+cd Server
+./scripts/uninstall-macos-service.sh
+```

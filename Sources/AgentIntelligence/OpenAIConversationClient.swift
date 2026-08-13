@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Security)
+import Security
+#endif
 
 public enum AgentIntelligenceError: LocalizedError, Sendable {
     case missingCredential
@@ -31,15 +34,39 @@ public struct AgentAIConfiguration: Equatable, Sendable {
     }
 
     public static func fromEnvironment(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> Self {
-        let endpoint = environment["JARVIS_AI_ENDPOINT"]
-            .flatMap(URL.init(string:))
+        let explicitEndpoint = environment["JARVIS_AI_ENDPOINT"].flatMap(URL.init(string:))
+        let keychainToken = explicitEndpoint == nil ? JarvisRelayKeychain.clientToken() : nil
+        let endpoint = explicitEndpoint
+            ?? (keychainToken == nil ? nil : URL(string: "http://127.0.0.1:8787/v1/responses"))
             ?? URL(string: "https://api.openai.com/v1/responses")!
         return Self(
             endpoint: endpoint,
             apiKey: environment["OPENAI_API_KEY"],
-            clientToken: environment["JARVIS_CLIENT_TOKEN"],
+            clientToken: environment["JARVIS_CLIENT_TOKEN"] ?? keychainToken,
             model: environment["OPENAI_MODEL"] ?? "gpt-5.6-terra"
         )
+    }
+}
+
+private enum JarvisRelayKeychain {
+    static func clientToken() -> String? {
+#if canImport(Security)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.dltldn1234.jarvis.server",
+            kSecAttrAccount as String: "client-token",
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+#else
+        return nil
+#endif
     }
 }
 
