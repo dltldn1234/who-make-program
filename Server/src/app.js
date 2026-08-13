@@ -45,6 +45,11 @@ export function createRequestHandler(configuration, proxy) {
       if (error instanceof SyntaxError) {
         return sendJSON(response, 400, { error: { message: "Malformed JSON body" } });
       }
+      if (error?.code === "usageLimitExceeded" || error?.code === "sessionBudgetExceeded") {
+        return sendJSON(response, 429, {
+          error: { message: "Codex 사용량 한도에 도달했습니다. Codex 설정의 Usage/Credits를 확인해 주세요." }
+        });
+      }
       console.error("jarvis_request_failed", error instanceof Error ? error.message : error);
       return sendJSON(response, 502, { error: { message: "AI upstream unavailable" } });
     }

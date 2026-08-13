@@ -1,5 +1,5 @@
 const DEFAULT_PORT = 8787;
-const DEFAULT_MODEL = "gpt-5.6-terra";
+const DEFAULT_CODEX_BINARY = "/Users/isiu/.local/bin/codex";
 
 export function loadConfiguration(environment = process.env) {
   const port = parseInteger(environment.PORT, DEFAULT_PORT, 1, 65_535, "PORT");
@@ -10,7 +10,6 @@ export function loadConfiguration(environment = process.env) {
     600,
     "JARVIS_REQUESTS_PER_MINUTE"
   );
-  const openAIKey = required(environment.OPENAI_API_KEY, "OPENAI_API_KEY");
   const clientToken = required(environment.JARVIS_CLIENT_TOKEN, "JARVIS_CLIENT_TOKEN");
 
   if (clientToken.length < 32) {
@@ -20,12 +19,13 @@ export function loadConfiguration(environment = process.env) {
   return Object.freeze({
     host: environment.HOST?.trim() || "127.0.0.1",
     port,
-    model: environment.OPENAI_MODEL?.trim() || DEFAULT_MODEL,
-    openAIKey,
     clientToken,
     requestsPerMinute,
     maxBodyBytes: 32 * 1024,
-    openAIEndpoint: "https://api.openai.com/v1/responses"
+    codexBinary: environment.CODEX_BINARY?.trim() || DEFAULT_CODEX_BINARY,
+    codexHome: environment.CODEX_HOME?.trim() || `${environment.HOME || "/Users/isiu"}/.codex`,
+    codexWorkingDirectory: environment.CODEX_WORKING_DIRECTORY?.trim() || process.cwd(),
+    logCodexErrors: environment.JARVIS_LOG_CODEX_ERRORS === "1"
   });
 }
 

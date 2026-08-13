@@ -1,10 +1,10 @@
 import { createServer } from "node:http";
 import { createRequestHandler } from "./app.js";
 import { loadConfiguration } from "./config.js";
-import { createOpenAIProxy } from "./openai.js";
+import { createCodexProxy } from "./codex.js";
 
 const configuration = loadConfiguration();
-const handler = createRequestHandler(configuration, createOpenAIProxy(configuration));
+const handler = createRequestHandler(configuration, createCodexProxy(configuration));
 const server = createServer((request, response) => {
   void handler(request, response);
 });

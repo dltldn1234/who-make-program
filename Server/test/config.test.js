@@ -4,7 +4,6 @@ import { isAuthorized, safetyIdentifier } from "../src/auth.js";
 import { loadConfiguration } from "../src/config.js";
 
 const validEnvironment = {
-  OPENAI_API_KEY: "server-secret",
   JARVIS_CLIENT_TOKEN: "a".repeat(32)
 };
 
@@ -12,11 +11,12 @@ test("configuration uses private local defaults", () => {
   const configuration = loadConfiguration(validEnvironment);
   assert.equal(configuration.host, "127.0.0.1");
   assert.equal(configuration.port, 8787);
-  assert.equal(configuration.model, "gpt-5.6-terra");
+  assert.equal(configuration.codexBinary, "/Users/isiu/.local/bin/codex");
+  assert.match(configuration.codexHome, /\.codex$/);
 });
 
 test("configuration rejects missing secrets and weak client tokens", () => {
-  assert.throws(() => loadConfiguration({}), /OPENAI_API_KEY/);
+  assert.throws(() => loadConfiguration({}), /JARVIS_CLIENT_TOKEN/);
   assert.throws(
     () => loadConfiguration({ ...validEnvironment, JARVIS_CLIENT_TOKEN: "short" }),
     /at least 32/
