@@ -86,15 +86,15 @@ HUD 명령창에서 `상태`, `몇 시야?`, `Xcode 열어줘`를 입력할 수 
 
 ## AI 대화 연결
 
-지원하지 않는 로컬 명령이나 일반 질문은 OpenAI Responses API로 전달됩니다. API 키는 앱과 저장소에 포함하지 않으며 실행 환경에서만 읽습니다.
+지원하지 않는 로컬 명령이나 일반 질문은 Mac에서 실행 중인 Codex app-server로 전달됩니다. AgentMac과 iPhone에는 OpenAI API 키를 넣지 않습니다. Codex CLI를 Mac에서 한 번 로그인한 뒤 개인 서버를 실행하세요.
 
 ```sh
-export OPENAI_API_KEY="your-project-api-key"
-export OPENAI_MODEL="gpt-5.6-terra"
-open /path/to/AgentMac.app
+codex login
+cd Server
+./scripts/install-macos-service.sh
 ```
 
-배포 환경에서는 Mac 앱에 API 키를 넣지 말고 자체 서버 릴레이를 사용합니다. 앱은 `JARVIS_AI_ENDPOINT`를 설정하면 해당 HTTPS 엔드포인트로 동일한 요청을 전송하므로, 서버에서 인증·사용량 제한·키 보관을 담당할 수 있습니다.
+서버는 Codex 로그인 세션을 사용하고, AgentMac은 `JARVIS_AI_ENDPOINT` 또는 localhost 기본 주소로 전용 릴레이에 연결합니다. 클라이언트 토큰은 Keychain에만 저장되며 일반 질문과 답변은 서버가 직접 Codex app-server에 전달합니다.
 
 ```sh
 export JARVIS_AI_ENDPOINT="https://agent.example.com/v1/responses"
@@ -102,7 +102,7 @@ export JARVIS_CLIENT_TOKEN="your-private-device-token"
 open /path/to/AgentMac.app
 ```
 
-저장소에는 의존성 없는 Node 기반 전용 서버가 포함되어 있습니다. 로컬 실행, Docker, 개인 VPN 및 HTTPS 배포 절차는 [Server/README.md](Server/README.md)를 따릅니다.
+저장소에는 의존성 없는 Node 기반 Mac 전용 서버가 포함되어 있습니다. Codex 기반 서버 설치와 개인 VPN 배포 절차는 [Server/README.md](Server/README.md)를 따릅니다.
 
 기기 실행 명령은 AI로 보내지 않고 기존 `JarvisCore` 해석기와 사용자 승인 정책으로 처리합니다. AI가 임의의 셸 명령을 생성하거나 실행할 수는 없습니다.
 

@@ -11,7 +11,7 @@ public enum AgentIntelligenceError: LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .missingCredential:
-            "AI 연결 키가 없습니다. OPENAI_API_KEY 또는 JARVIS_AI_ENDPOINT를 설정해 주세요."
+            "Codex JARVIS 서버 연결 정보가 없습니다. Mac 서버와 Codex 로그인을 확인해 주세요."
         case .invalidResponse:
             "AI 응답을 해석하지 못했습니다."
         case let .service(statusCode, message):
@@ -37,11 +37,10 @@ public struct AgentAIConfiguration: Equatable, Sendable {
         let explicitEndpoint = environment["JARVIS_AI_ENDPOINT"].flatMap(URL.init(string:))
         let keychainToken = explicitEndpoint == nil ? JarvisRelayKeychain.clientToken() : nil
         let endpoint = explicitEndpoint
-            ?? (keychainToken == nil ? nil : URL(string: "http://127.0.0.1:8787/v1/responses"))
-            ?? URL(string: "https://api.openai.com/v1/responses")!
+            ?? URL(string: "http://127.0.0.1:8787/v1/responses")!
         return Self(
             endpoint: endpoint,
-            apiKey: environment["OPENAI_API_KEY"],
+            apiKey: nil,
             clientToken: environment["JARVIS_CLIENT_TOKEN"] ?? keychainToken,
             model: environment["OPENAI_MODEL"] ?? "gpt-5.6-terra"
         )
@@ -84,8 +83,7 @@ public actor OpenAIConversationClient {
     }
 
     public func answer(_ prompt: String) async throws -> String {
-        if configuration.endpoint.host == "api.openai.com",
-           configuration.apiKey?.isEmpty != false {
+        if configuration.clientToken?.isEmpty != false {
             throw AgentIntelligenceError.missingCredential
         }
 
@@ -102,9 +100,6 @@ public actor OpenAIConversationClient {
         var request = URLRequest(url: configuration.endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let apiKey = configuration.apiKey, !apiKey.isEmpty {
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        }
         if let clientToken = configuration.clientToken, !clientToken.isEmpty {
             request.setValue(clientToken, forHTTPHeaderField: "X-Jarvis-Client-Token")
         }
@@ -117,13 +112,10 @@ public actor OpenAIConversationClient {
         guard 200..<300 ~= http.statusCode else {
             let message = (try? JSONDecoder().decode(ServiceErrorEnvelope.self, from: data).error.message)
                 ?? HTTPURLResponse.localizedString(forStatusCode: http.statusCode)
-            if http.statusCode == 429,
-               message.localizedCaseInsensitiveContains("credit")
-                || message.localizedCaseInsensitiveContains("quota")
-                || message.localizedCaseInsensitiveContains("billing") {
+            if http.statusCode == 429 {
                 throw AgentIntelligenceError.service(
                     statusCode: 429,
-                    message: "OpenAI API 크레딧이 없습니다. 프로젝트 Billing에서 크레딧을 추가한 뒤 다시 시도해 주세요."
+                    message: "Codex 사용량 한도에 도달했습니다. Codex 설정의 Usage/Credits를 확인해 주세요."
                 )
             }
             throw AgentIntelligenceError.service(statusCode: http.statusCode, message: message)
