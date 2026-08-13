@@ -117,6 +117,15 @@ public actor OpenAIConversationClient {
         guard 200..<300 ~= http.statusCode else {
             let message = (try? JSONDecoder().decode(ServiceErrorEnvelope.self, from: data).error.message)
                 ?? HTTPURLResponse.localizedString(forStatusCode: http.statusCode)
+            if http.statusCode == 429,
+               message.localizedCaseInsensitiveContains("credit")
+                || message.localizedCaseInsensitiveContains("quota")
+                || message.localizedCaseInsensitiveContains("billing") {
+                throw AgentIntelligenceError.service(
+                    statusCode: 429,
+                    message: "OpenAI API 크레딧이 없습니다. 프로젝트 Billing에서 크레딧을 추가한 뒤 다시 시도해 주세요."
+                )
+            }
             throw AgentIntelligenceError.service(statusCode: http.statusCode, message: message)
         }
 
