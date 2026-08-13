@@ -3,6 +3,7 @@ import JarvisCore
 import AgentLink
 import AgentVoice
 import AgentMotion
+import AgentIntelligence
 #if os(macOS)
 import CoreImage.CIFilterBuiltins
 import AppKit
@@ -20,6 +21,7 @@ public struct HUDRootView: View {
     @StateObject private var link = AgentLinkServer(name: Host.current().localizedName ?? "Agent Mac")
 
     private let engine = JarvisEngine(executor: MacActionExecutor())
+    private let intelligence = OpenAIConversationClient()
 
     public init() {}
 
@@ -219,6 +221,10 @@ public struct HUDRootView: View {
 
         Task {
             let prepared = await engine.prepare(submitted)
+            if case .unknown = prepared.action {
+                await answerWithAI(submitted)
+                return
+            }
             switch prepared.approval {
             case .automatic:
                 execute(prepared, approved: true)
@@ -227,6 +233,25 @@ public struct HUDRootView: View {
                 showingApproval = true
                 mode = .idle
                 response = "사용자 승인을 기다리는 중"
+            }
+        }
+    }
+
+    @MainActor
+    private func answerWithAI(_ question: String) async {
+        response = "JARVIS AI가 답변을 생성하고 있습니다"
+        mode = .thinking
+
+        do {
+            let answer = try await intelligence.answer(question)
+            response = answer
+            mode = .speaking
+            voice.speak(answer)
+        } catch {
+            response = error.localizedDescription
+            mode = .idle
+            if voice.wakeModeEnabled {
+                Task { await voice.enableWakeMode() }
             }
         }
     }
