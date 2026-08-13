@@ -67,11 +67,16 @@ public struct HUDRootView: View {
             voice.onFinalTranscript = { transcript in
                 submitCommand(transcript)
             }
+            voice.onWakeSignal = { signal in
+                response = signal == .clap ? "박수 감지 · JARVIS 기동" : "JARVIS 호출 감지 · 명령 채널 개방"
+                mode = .listening
+            }
             motion.onGesture = handleHeadGesture
             link.onCommand = { remoteCommand in
                 submitCommand(remoteCommand)
             }
             link.start()
+            Task { await voice.enableWakeMode() }
         }
         .onDisappear(perform: link.stop)
         .onChange(of: voice.state) { _, state in
@@ -252,6 +257,9 @@ public struct HUDRootView: View {
             if mode == .listening || mode == .speaking {
                 mode = .idle
             }
+        case .wakeMonitoring:
+            mode = .idle
+            response = "웨이크 대기 중 · 박수를 치거나 ‘자비스’라고 부르세요"
         case .requestingPermission, .processing:
             mode = .thinking
         case .listening:
