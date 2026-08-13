@@ -8,8 +8,8 @@ struct WakeSignalDetectorTests {
         var detector = WakeSignalDetector()
 
         #expect(detector.observeAudioLevel(0.08, at: 1) == nil)
-        #expect(detector.observeAudioLevel(0.91, at: 1.05) == .clap)
-        #expect(detector.observeAudioLevel(0.96, at: 1.08) == nil)
+        #expect(detector.observeAudioLevel(0.56, at: 1.05) == nil)
+        #expect(detector.observeAudioLevel(0.30, at: 1.08) == .clap)
     }
 
     @Test("Ambient loudness without a quiet onset is not a clap")
@@ -17,7 +17,9 @@ struct WakeSignalDetectorTests {
         var detector = WakeSignalDetector()
 
         #expect(detector.observeAudioLevel(0.42, at: 1) == nil)
-        #expect(detector.observeAudioLevel(0.84, at: 1.1) == nil)
+        #expect(detector.observeAudioLevel(0.56, at: 1.1) == nil)
+        #expect(detector.observeAudioLevel(0.52, at: 1.16) == nil)
+        #expect(detector.observeAudioLevel(0.49, at: 1.22) == nil)
     }
 
     @Test("Korean wake word preserves a trailing command")

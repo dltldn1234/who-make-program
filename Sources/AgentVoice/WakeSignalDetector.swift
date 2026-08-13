@@ -9,6 +9,8 @@ public struct WakeSignalDetector: Sendable {
     private let wakeWords = ["자비스", "jarvis"]
     private var previousLevel: Float = 0
     private var armedForClap = true
+    private var clapCandidateAt: TimeInterval?
+    private var clapPeak: Float = 0
     private var lastSignalAt: TimeInterval = -.infinity
 
     public init() {}
@@ -18,18 +20,41 @@ public struct WakeSignalDetector: Sendable {
         at timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime
     ) -> WakeSignal? {
         let normalized = min(max(level, 0), 1)
-        defer { previousLevel = normalized }
+        let quietThreshold: Float = 0.18
+        let onsetThreshold: Float = 0.24
+        let peakThreshold: Float = 0.42
 
-        if normalized < 0.16 {
+        if normalized < quietThreshold {
             armedForClap = true
         }
 
-        let isSharpTransient = armedForClap && previousLevel < 0.22 && normalized >= 0.78
-        guard isSharpTransient, timestamp - lastSignalAt >= 1.25 else { return nil }
+        if let candidateAt = clapCandidateAt {
+            clapPeak = max(clapPeak, normalized)
+            let elapsed = timestamp - candidateAt
+            let hasReleased = normalized <= clapPeak * 0.72
+            let isClap = elapsed <= 0.18 && clapPeak >= peakThreshold && hasReleased
+            if isClap, timestamp - lastSignalAt >= 1.25 {
+                clapCandidateAt = nil
+                lastSignalAt = timestamp
+                previousLevel = normalized
+                return .clap
+            }
+            if elapsed > 0.24 {
+                clapCandidateAt = nil
+                clapPeak = 0
+            }
+        }
 
-        armedForClap = false
-        lastSignalAt = timestamp
-        return .clap
+        if armedForClap && clapCandidateAt == nil,
+           previousLevel < onsetThreshold,
+           normalized >= peakThreshold {
+            clapCandidateAt = timestamp
+            clapPeak = normalized
+            armedForClap = false
+        }
+
+        previousLevel = normalized
+        return nil
     }
 
     public mutating func observeTranscript(
@@ -56,6 +81,8 @@ public struct WakeSignalDetector: Sendable {
     public mutating func reset() {
         previousLevel = 0
         armedForClap = true
+        clapCandidateAt = nil
+        clapPeak = 0
         lastSignalAt = -.infinity
     }
 }
