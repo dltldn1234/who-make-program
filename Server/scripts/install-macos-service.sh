@@ -2,7 +2,6 @@
 set -euo pipefail
 
 service_name="com.dltldn1234.jarvis.server"
-openai_account="openai-api-key"
 client_account="client-token"
 script_directory="${0:A:h}"
 runner_path="$script_directory/run-macos-service.sh"
@@ -16,24 +15,31 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
+codex_binary=""
+for candidate in "$HOME/.local/bin/codex" "$HOME/.codex/packages/standalone/current/codex" /opt/homebrew/bin/codex /usr/local/bin/codex; do
+  if [[ -x "$candidate" ]]; then
+    codex_binary="$candidate"
+    break
+  fi
+done
+if [[ -z "$codex_binary" ]]; then
+  print -u2 "Codex CLI를 찾지 못했습니다. Codex를 설치하고 한 번 로그인해 주세요."
+  exit 1
+fi
+if ! "$codex_binary" login status >/dev/null 2>&1; then
+  print -u2 "Codex CLI 로그인이 필요합니다. 먼저 codex login을 실행해 주세요."
+  exit 1
+fi
+
 node_major="$(node -p 'process.versions.node.split(`.`)[0]')"
 if (( node_major < 22 )); then
   print -u2 "Node.js 22 이상이 필요합니다. 현재 버전: $(node --version)"
   exit 1
 fi
 
-print -n "OpenAI 프로젝트 API 키를 입력하세요(화면에 표시되지 않음): "
-read -rs openai_key
-print
-if [[ -z "$openai_key" ]]; then
-  print -u2 "API 키가 비어 있어 설치를 중단합니다."
-  exit 1
-fi
-
 client_token="$(openssl rand -hex 32)"
-security add-generic-password -U -s "$service_name" -a "$openai_account" -w "$openai_key" >/dev/null
 security add-generic-password -U -s "$service_name" -a "$client_account" -w "$client_token" >/dev/null
-unset openai_key client_token
+unset client_token
 
 mkdir -p "$launch_agents_directory" "$logs_directory"
 chmod +x "$runner_path"

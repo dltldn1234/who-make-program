@@ -2,7 +2,6 @@
 set -euo pipefail
 
 service_name="com.dltldn1234.jarvis.server"
-openai_account="openai-api-key"
 client_account="client-token"
 script_directory="${0:A:h}"
 server_directory="${script_directory:h}"
@@ -19,11 +18,24 @@ if [[ -z "$node_binary" ]]; then
   exit 127
 fi
 
-export OPENAI_API_KEY="$(security find-generic-password -s "$service_name" -a "$openai_account" -w)"
+codex_binary=""
+for candidate in "$HOME/.local/bin/codex" "$HOME/.codex/packages/standalone/current/codex" /opt/homebrew/bin/codex /usr/local/bin/codex; do
+  if [[ -x "$candidate" ]]; then
+    codex_binary="$candidate"
+    break
+  fi
+done
+if [[ -z "$codex_binary" ]]; then
+  print -u2 "Codex CLI를 찾지 못했습니다."
+  exit 127
+fi
+
 export JARVIS_CLIENT_TOKEN="$(security find-generic-password -s "$service_name" -a "$client_account" -w)"
 export HOST="127.0.0.1"
 export PORT="8787"
-export OPENAI_MODEL="${OPENAI_MODEL:-gpt-5.6-terra}"
+export CODEX_BINARY="$codex_binary"
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+export CODEX_WORKING_DIRECTORY="${CODEX_WORKING_DIRECTORY:-$server_directory/..}"
 
 cd "$server_directory"
 exec "$node_binary" src/server.js
