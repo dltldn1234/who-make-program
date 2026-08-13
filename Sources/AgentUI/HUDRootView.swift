@@ -13,6 +13,7 @@ public struct HUDRootView: View {
     @State private var mode: HolographicCorePhase = .idle
     @State private var command = ""
     @State private var response = "시스템 준비 완료"
+    @State private var showingTextFallback = false
     @State private var pendingCommand: PreparedCommand?
     @State private var showingApproval = false
     @State private var showingPairingQR = false
@@ -188,26 +189,46 @@ public struct HUDRootView: View {
 
             HStack(spacing: 10) {
                 Button(action: voice.toggleListening) {
-                    Image(systemName: voice.state.isListening ? "stop.fill" : "mic.fill")
-                        .frame(width: 18, height: 18)
+                    Label(
+                        voice.state.isListening ? "말하기 종료" : "말로 명령하기",
+                        systemImage: voice.state.isListening ? "stop.fill" : "mic.fill"
+                    )
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .frame(minWidth: 154)
                 }
                 .buttonStyle(HUDButtonStyle(selected: voice.state.isListening))
-                .help(voice.state.isListening ? "음성 입력 종료" : "음성 입력 시작")
+                .help(voice.state.isListening ? "음성 입력 종료" : "음성으로 자비스에게 명령")
 
-                TextField("명령 입력 · 예: Xcode 열어줘", text: $command)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13, design: .monospaced))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 11)
-                    .background(.black.opacity(0.35), in: Capsule())
-                    .overlay(Capsule().stroke(.cyan.opacity(0.38)))
-                    .onSubmit { submitCommand() }
-
-                Button("EXECUTE") { submitCommand() }
-                    .buttonStyle(HUDButtonStyle(selected: true))
-                    .disabled(command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showingTextFallback.toggle()
+                    }
+                } label: {
+                    Image(systemName: showingTextFallback ? "keyboard.chevron.compact.down" : "keyboard")
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(HUDButtonStyle(selected: showingTextFallback))
+                .help(showingTextFallback ? "텍스트 입력 닫기" : "텍스트 입력 fallback 열기")
             }
             .frame(maxWidth: 700)
+
+            if showingTextFallback {
+                HStack(spacing: 10) {
+                    TextField("텍스트 fallback · 예: Xcode 열어줘", text: $command)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13, design: .monospaced))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 11)
+                        .background(.black.opacity(0.35), in: Capsule())
+                        .overlay(Capsule().stroke(.cyan.opacity(0.38)))
+                        .onSubmit { submitCommand() }
+
+                    Button("EXECUTE") { submitCommand() }
+                        .buttonStyle(HUDButtonStyle(selected: true))
+                        .disabled(command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .frame(maxWidth: 700)
+            }
         }
     }
 
@@ -250,9 +271,7 @@ public struct HUDRootView: View {
         } catch {
             response = error.localizedDescription
             mode = .idle
-            if voice.wakeModeEnabled {
-                Task { await voice.enableWakeMode() }
-            }
+            voice.speak(error.localizedDescription)
         }
     }
 
