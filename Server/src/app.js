@@ -55,18 +55,22 @@ function readJSON(request, maximumBytes) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let received = 0;
+    let exceeded = false;
     request.on("data", chunk => {
       received += chunk.length;
       if (received > maximumBytes) {
-        const error = new Error("body too large");
-        error.code = "BODY_TOO_LARGE";
-        reject(error);
-        request.destroy();
+        exceeded = true;
         return;
       }
       chunks.push(chunk);
     });
     request.on("end", () => {
+      if (exceeded) {
+        const error = new Error("body too large");
+        error.code = "BODY_TOO_LARGE";
+        reject(error);
+        return;
+      }
       try {
         resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
       } catch (error) {
