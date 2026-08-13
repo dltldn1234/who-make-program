@@ -24,11 +24,13 @@ struct OpenAIConversationClientTests {
     func environmentConfiguration() {
         let configuration = AgentAIConfiguration.fromEnvironment([
             "JARVIS_AI_ENDPOINT": "https://jarvis.example.com/respond",
+            "JARVIS_CLIENT_TOKEN": "private-device-token",
             "OPENAI_MODEL": "test-model"
         ])
 
         #expect(configuration.endpoint.absoluteString == "https://jarvis.example.com/respond")
         #expect(configuration.model == "test-model")
         #expect(configuration.apiKey == nil)
+        #expect(configuration.clientToken == "private-device-token")
     }
 }

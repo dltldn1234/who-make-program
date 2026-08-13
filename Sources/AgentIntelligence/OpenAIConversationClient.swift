@@ -20,11 +20,13 @@ public enum AgentIntelligenceError: LocalizedError, Sendable {
 public struct AgentAIConfiguration: Equatable, Sendable {
     public let endpoint: URL
     public let apiKey: String?
+    public let clientToken: String?
     public let model: String
 
-    public init(endpoint: URL, apiKey: String?, model: String) {
+    public init(endpoint: URL, apiKey: String?, clientToken: String? = nil, model: String) {
         self.endpoint = endpoint
         self.apiKey = apiKey
+        self.clientToken = clientToken
         self.model = model
     }
 
@@ -35,6 +37,7 @@ public struct AgentAIConfiguration: Equatable, Sendable {
         return Self(
             endpoint: endpoint,
             apiKey: environment["OPENAI_API_KEY"],
+            clientToken: environment["JARVIS_CLIENT_TOKEN"],
             model: environment["OPENAI_MODEL"] ?? "gpt-5.6-terra"
         )
     }
@@ -74,6 +77,9 @@ public actor OpenAIConversationClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let apiKey = configuration.apiKey, !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        if let clientToken = configuration.clientToken, !clientToken.isEmpty {
+            request.setValue(clientToken, forHTTPHeaderField: "X-Jarvis-Client-Token")
         }
         request.httpBody = try JSONEncoder().encode(body)
 
