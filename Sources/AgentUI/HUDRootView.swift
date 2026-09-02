@@ -3,18 +3,26 @@ import JarvisCore
 import AgentLink
 import AgentVoice
 import AgentMotion
+import AgentIntelligence
+#if os(macOS)
+import CoreImage.CIFilterBuiltins
+import AppKit
+#endif
 
 public struct HUDRootView: View {
-    @State private var mode: CoreMode = .idle
+    @State private var mode: HolographicCorePhase = .idle
     @State private var command = ""
     @State private var response = "시스템 준비 완료"
+    @State private var showingTextFallback = false
     @State private var pendingCommand: PreparedCommand?
     @State private var showingApproval = false
+    @State private var showingPairingQR = false
     @StateObject private var voice = VoiceInteractionController()
     @StateObject private var motion = HeadphoneMotionController()
     @StateObject private var link = AgentLinkServer(name: Host.current().localizedName ?? "Agent Mac")
 
     private let engine = JarvisEngine(executor: MacActionExecutor())
+    private let intelligence = OpenAIConversationClient()
 
     public init() {}
 
@@ -40,7 +48,7 @@ public struct HUDRootView: View {
                 .padding(.top, 90)
                 .padding(.bottom, 130)
 
-                CodeSphere(mode: mode, audioEnergy: voice.audioLevel)
+                HolographicCoreView(phase: mode, audioLevel: voice.audioLevel)
                     .frame(
                         width: min(geometry.size.width * 0.76, geometry.size.height * 0.92),
                         height: min(geometry.size.width * 0.76, geometry.size.height * 0.92)
@@ -62,11 +70,16 @@ public struct HUDRootView: View {
             voice.onFinalTranscript = { transcript in
                 submitCommand(transcript)
             }
+            voice.onWakeSignal = { signal in
+                response = signal == .clap ? "박수 감지 · JARVIS 기동" : "JARVIS 호출 감지 · 명령 채널 개방"
+                mode = .listening
+            }
             motion.onGesture = handleHeadGesture
             link.onCommand = { remoteCommand in
                 submitCommand(remoteCommand)
             }
             link.start()
+            Task { await voice.enableWakeMode() }
         }
         .onDisappear(perform: link.stop)
         .onChange(of: voice.state) { _, state in
@@ -84,6 +97,11 @@ public struct HUDRootView: View {
                 Text(reason)
             }
         }
+        .sheet(isPresented: $showingPairingQR) {
+            if case let .advertising(code) = link.state {
+                PairingQRCodeView(code: code)
+            }
+        }
     }
 
     private var topBar: some View {
@@ -97,13 +115,18 @@ public struct HUDRootView: View {
             }
             Spacer()
             if case let .advertising(code) = link.state {
-                Text("PAIR \(code)")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(.cyan.opacity(0.08), in: Capsule())
-                    .overlay(Capsule().stroke(.cyan.opacity(0.35)))
-                    .help("iPhone Agent에 입력할 페어링 코드")
+                Button {
+                    showingPairingQR = true
+                } label: {
+                    Label("PAIR \(code)", systemImage: "qrcode")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(.cyan.opacity(0.08), in: Capsule())
+                        .overlay(Capsule().stroke(.cyan.opacity(0.35)))
+                }
+                .buttonStyle(.plain)
+                .help("QR 코드를 열어 iPhone Agent와 페어링")
             } else if case let .connected(peerName) = link.state {
                 Label(peerName, systemImage: "iphone.radiowaves.left.and.right")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -130,7 +153,7 @@ public struct HUDRootView: View {
 
     private var modePicker: some View {
         HStack(spacing: 8) {
-            ForEach(CoreMode.allCases) { item in
+            ForEach(HolographicCorePhase.allCases) { item in
                 Button(item.label) { mode = item }
                     .buttonStyle(HUDButtonStyle(selected: mode == item))
             }
@@ -166,26 +189,46 @@ public struct HUDRootView: View {
 
             HStack(spacing: 10) {
                 Button(action: voice.toggleListening) {
-                    Image(systemName: voice.state.isListening ? "stop.fill" : "mic.fill")
-                        .frame(width: 18, height: 18)
+                    Label(
+                        voice.state.isListening ? "말하기 종료" : "말로 명령하기",
+                        systemImage: voice.state.isListening ? "stop.fill" : "mic.fill"
+                    )
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .frame(minWidth: 154)
                 }
                 .buttonStyle(HUDButtonStyle(selected: voice.state.isListening))
-                .help(voice.state.isListening ? "음성 입력 종료" : "음성 입력 시작")
+                .help(voice.state.isListening ? "음성 입력 종료" : "음성으로 자비스에게 명령")
 
-                TextField("명령 입력 · 예: Xcode 열어줘", text: $command)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13, design: .monospaced))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 11)
-                    .background(.black.opacity(0.35), in: Capsule())
-                    .overlay(Capsule().stroke(.cyan.opacity(0.38)))
-                    .onSubmit { submitCommand() }
-
-                Button("EXECUTE") { submitCommand() }
-                    .buttonStyle(HUDButtonStyle(selected: true))
-                    .disabled(command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showingTextFallback.toggle()
+                    }
+                } label: {
+                    Image(systemName: showingTextFallback ? "keyboard.chevron.compact.down" : "keyboard")
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(HUDButtonStyle(selected: showingTextFallback))
+                .help(showingTextFallback ? "텍스트 입력 닫기" : "텍스트 입력 fallback 열기")
             }
             .frame(maxWidth: 700)
+
+            if showingTextFallback {
+                HStack(spacing: 10) {
+                    TextField("텍스트 fallback · 예: Xcode 열어줘", text: $command)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13, design: .monospaced))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 11)
+                        .background(.black.opacity(0.35), in: Capsule())
+                        .overlay(Capsule().stroke(.cyan.opacity(0.38)))
+                        .onSubmit { submitCommand() }
+
+                    Button("EXECUTE") { submitCommand() }
+                        .buttonStyle(HUDButtonStyle(selected: true))
+                        .disabled(command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .frame(maxWidth: 700)
+            }
         }
     }
 
@@ -199,6 +242,10 @@ public struct HUDRootView: View {
 
         Task {
             let prepared = await engine.prepare(submitted)
+            if case .unknown = prepared.action {
+                await answerWithAI(submitted)
+                return
+            }
             switch prepared.approval {
             case .automatic:
                 execute(prepared, approved: true)
@@ -208,6 +255,23 @@ public struct HUDRootView: View {
                 mode = .idle
                 response = "사용자 승인을 기다리는 중"
             }
+        }
+    }
+
+    @MainActor
+    private func answerWithAI(_ question: String) async {
+        response = "JARVIS AI가 답변을 생성하고 있습니다"
+        mode = .thinking
+
+        do {
+            let answer = try await intelligence.answer(question)
+            response = answer
+            mode = .speaking
+            voice.speak(answer)
+        } catch {
+            response = error.localizedDescription
+            mode = .idle
+            voice.speak(error.localizedDescription)
         }
     }
 
@@ -237,6 +301,9 @@ public struct HUDRootView: View {
             if mode == .listening || mode == .speaking {
                 mode = .idle
             }
+        case .wakeMonitoring:
+            mode = .idle
+            response = "웨이크 대기 중 · 박수를 치거나 ‘자비스’라고 부르세요"
         case .requestingPermission, .processing:
             mode = .thinking
         case .listening:
@@ -268,38 +335,57 @@ public struct HUDRootView: View {
     }
 }
 
-private enum CoreMode: String, CaseIterable, Identifiable {
-    case idle, listening, thinking, speaking
+#if os(macOS)
+private struct PairingQRCodeView: View {
+    let code: String
+    @Environment(\.dismiss) private var dismiss
 
-    var id: Self { self }
-
-    var label: String {
-        switch self {
-        case .idle: "대기"
-        case .listening: "듣는 중"
-        case .thinking: "분석 중"
-        case .speaking: "응답 중"
+    private var qrImage: NSImage? {
+        guard let payload = AgentLinkPairingPayload.encode(code: code) else { return nil }
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(payload.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)) else {
+            return nil
         }
+        let representation = NSCIImageRep(ciImage: output)
+        let image = NSImage(size: representation.size)
+        image.addRepresentation(representation)
+        return image
     }
 
-    var speed: Double {
-        switch self {
-        case .idle: 0.12
-        case .listening: 0.22
-        case .thinking: 0.75
-        case .speaking: 0.3
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("SECURE DEVICE LINK")
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .tracking(2)
+            if let qrImage {
+                Image(nsImage: qrImage)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 260, height: 260)
+                    .padding(18)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 20))
+            }
+            Text("iPhone Agent에서 QR 스캔")
+                .font(.system(size: 12, design: .monospaced))
+            Text("PAIRING CODE  \(code)")
+                .font(.system(size: 15, weight: .bold, design: .monospaced))
+                .foregroundStyle(.cyan)
+            Text("같은 Wi-Fi에서만 연결되며 최초 연결 후 TLS 신뢰 키가 Keychain에 저장됩니다.")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 330)
+            Button("닫기", action: dismiss.callAsFunction)
+                .keyboardShortcut(.cancelAction)
         }
-    }
-
-    var pulse: Double {
-        switch self {
-        case .idle: 0.02
-        case .listening: 0.08
-        case .thinking: 0.04
-        case .speaking: 0.11
-        }
+        .padding(28)
+        .frame(width: 400)
+        .background(Color(red: 0.002, green: 0.012, blue: 0.026))
     }
 }
+#endif
 
 private struct HUDButtonStyle: ButtonStyle {
     let selected: Bool
@@ -338,7 +424,7 @@ private struct AudioEnergyBar: View {
 }
 
 private struct CodeSphere: View {
-    let mode: CoreMode
+    let mode: HolographicCorePhase
     let audioEnergy: Float
     private let particles = CodeParticle.makeCloud(count: 640)
 
@@ -349,8 +435,8 @@ private struct CodeSphere: View {
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let baseRadius = min(size.width, size.height) * 0.34
                 let reactivePulse = mode == .listening ? Double(audioEnergy) * 0.035 : 0
-                let pulse = 1 + sin(time * (mode == .speaking ? 7 : 2.2)) * mode.pulse + reactivePulse
-                let angle = time * mode.speed
+                let pulse = 1 + sin(time * (mode == .speaking ? 7 : 2.2)) * Double(mode.pulseStrength) + reactivePulse
+                let angle = time * Double(mode.rotationSpeed)
 
                 drawAtmosphere(in: &context, center: center, radius: baseRadius, time: time)
                 drawGlow(in: &context, center: center, radius: baseRadius * pulse)

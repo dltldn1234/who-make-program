@@ -6,6 +6,9 @@ Mac을 주 실행 본체로 사용하고 향후 iPhone과 AirPods를 연결하�
 
 - 한국어 텍스트 명령 해석
 - 마이크 기반 실시간 한국어 음성 인식과 부분 자막
+- 박수 또는 `자비스` 호출을 감지하는 상시 웨이크 모드
+- 로컬 기기 명령과 AI 대화 요청을 분리하는 지능형 라우팅
+- OpenAI Responses API 기반 한국어 질의응답과 음성 답변
 - macOS 시스템 음성을 이용한 한국어 응답
 - 음성 입력 세기에 반응하는 홀로그램 코어
 - 지원되는 AirPods의 머리 움직임 추적
@@ -33,9 +36,11 @@ Sources/JarvisCore   플랫폼과 UI에 독립적인 명령·승인·실행 코�
 Sources/AgentVoice  권한·마이크 입력·음성 인식·음성 합성 계층
 Sources/AgentMotion AirPods 자세 스트림과 머리 제스처 판정 계층
 Sources/AgentLink   Mac·iPhone 메시지 모델과 검증 코덱
+Sources/AgentIntelligence OpenAI 대화 요청·응답과 런타임 보안 설정
 Sources/AgentUI      재사용 가능한 SwiftUI 홀로그램 HUD
 Sources/JarvisCLI    코어를 빠르게 검증하는 터미널 클라이언트
 Sources/JarvisHUD    SwiftPM HUD 프로토타입 실행기
+Server               개인 전용 인증·요청 제한·OpenAI 릴레이 서버
 Tests                코어 동작 테스트
 Project.swift        재현 가능한 Xcode 프로젝트 선언
 ```
@@ -77,6 +82,30 @@ HUD 명령창에서 `상태`, `몇 시야?`, `Xcode 열어줘`를 입력할 수 
 
 마이크 버튼을 누르면 macOS가 마이크와 음성 인식 권한을 요청합니다. 권한을 허용한 뒤 한국어로 명령하고 다시 버튼을 누르거나 인식이 완료될 때까지 기다리면 기존 명령 승인 정책을 거쳐 실행됩니다. 음성 데이터는 파일로 저장하지 않습니다.
 
+앱이 실행되면 웨이크 모드가 자동으로 시작됩니다. 박수를 한 번 치거나 `자비스`라고 말하면 명령 입력 모드로 전환됩니다. `자비스 Xcode 열어줘`처럼 호출어와 명령을 한 문장으로 말할 수도 있습니다. 응답이 끝나면 웨이크 대기로 자동 복귀합니다.
+
+## AI 대화 연결
+
+지원하지 않는 로컬 명령이나 일반 질문은 Mac에서 실행 중인 Codex app-server로 전달됩니다. AgentMac과 iPhone에는 OpenAI API 키를 넣지 않습니다. Codex CLI를 Mac에서 한 번 로그인한 뒤 개인 서버를 실행하세요.
+
+```sh
+codex login
+cd Server
+./scripts/install-macos-service.sh
+```
+
+서버는 Codex 로그인 세션을 사용하고, AgentMac은 `JARVIS_AI_ENDPOINT` 또는 localhost 기본 주소로 전용 릴레이에 연결합니다. 클라이언트 토큰은 Keychain에만 저장되며 일반 질문과 답변은 서버가 직접 Codex app-server에 전달합니다.
+
+```sh
+export JARVIS_AI_ENDPOINT="https://agent.example.com/v1/responses"
+export JARVIS_CLIENT_TOKEN="your-private-device-token"
+open /path/to/AgentMac.app
+```
+
+저장소에는 의존성 없는 Node 기반 Mac 전용 서버가 포함되어 있습니다. Codex 기반 서버 설치와 개인 VPN 배포 절차는 [Server/README.md](Server/README.md)를 따릅니다.
+
+기기 실행 명령은 AI로 보내지 않고 기존 `JarvisCore` 해석기와 사용자 승인 정책으로 처리합니다. AI가 임의의 셸 명령을 생성하거나 실행할 수는 없습니다.
+
 상단 AirPods 버튼은 모션 센서를 지원하는 AirPods가 연결된 경우 헤드 트래킹을 시작합니다. 외부 상태를 변경하는 명령의 승인 창이 표시된 동안 끄덕이면 승인하고, 고개를 좌우로 흔들면 취소합니다. 승인 대기 명령이 없을 때 감지된 움직임은 어떤 작업도 실행하지 않습니다.
 
 ## 테스트
@@ -89,6 +118,7 @@ git diff --check
 ## 개발 원칙
 
 - 알 수 없는 자연어를 임의의 셸 명령으로 실행하지 않습니다.
+- API 키와 장기 자격 증명을 소스 코드나 앱 번들에 저장하지 않습니다.
 - 외부 상태를 변경하는 기능은 승인 정책을 통과해야 합니다.
 - 음성, 손동작, AirPods, iPhone은 동일한 명령 코어에 입력 어댑터로 연결합니다.
 - 마이크와 카메라 같은 민감한 권한은 해당 기능을 처음 사용할 때 요청합니다.

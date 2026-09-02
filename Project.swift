@@ -45,6 +45,13 @@ let project = Project(
             infoPlist: .extendingDefault(
                 with: [
                     "CFBundleDisplayName": "Agent",
+                    "CFBundleURLTypes": [
+                        [
+                            "CFBundleURLName": "com.dltldn1234.agent.phone.pairing",
+                            "CFBundleURLSchemes": ["agent-link"],
+                        ],
+                    ],
+                    "NSCameraUsageDescription": "Mac Agent의 QR 페어링 코드를 스캔하기 위해 카메라를 사용합니다.",
                     "NSLocalNetworkUsageDescription": "Mac의 Agent와 안전하게 연결하고 명령을 전달하기 위해 로컬 네트워크를 사용합니다.",
                     "NSBonjourServices": ["_agent-link._tcp"],
                 ]

@@ -334,6 +334,8 @@ public final class AgentLinkClient: ObservableObject {
         retryTask?.cancel()
         if let trustedCredential {
             connect(to: endpoint, credential: trustedCredential, pairingCode: nil)
+        } else if !pairingCode.isEmpty {
+            connectForPairing(to: endpoint, code: pairingCode)
         } else {
             state = .pairing
         }
