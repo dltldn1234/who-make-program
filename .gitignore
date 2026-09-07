@@ -9,3 +9,8 @@ Derived/
 xcuserdata/
 Server/.env
 Server/coverage/
+Brain/.env
+Brain/.venv/
+Brain/**/__pycache__/
+Brain/.pytest_cache/
+*.pyc

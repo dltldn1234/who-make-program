@@ -1,126 +1,135 @@
-# Personal Agent System
+English | [한국어](README.ko.md)
 
-Mac을 주 실행 본체로 사용하고 향후 iPhone과 AirPods를 연결하는 개인 AI 에이전트입니다. 제품명은 아직 정하지 않았으며 코드에서는 중립적인 `Agent` 이름을 사용합니다.
+# VANTA
 
-## 현재 기능
+**Your personal intelligence layer.**
 
-- 한국어 텍스트 명령 해석
-- 마이크 기반 실시간 한국어 음성 인식과 부분 자막
-- 박수 또는 `자비스` 호출을 감지하는 상시 웨이크 모드
-- 로컬 기기 명령과 AI 대화 요청을 분리하는 지능형 라우팅
-- OpenAI Responses API 기반 한국어 질의응답과 음성 답변
-- macOS 시스템 음성을 이용한 한국어 응답
-- 음성 입력 세기에 반응하는 홀로그램 코어
-- 지원되는 AirPods의 머리 움직임 추적
-- 승인 대기 중 끄덕임 승인과 좌우 움직임 취소
-- 읽기 작업과 외부 상태 변경 작업의 승인 정책 분리
-- 도움말, 상태, 현재 시간 응답
-- 명시적 승인 후 macOS 앱 실행
-- 코드 입자 1,120개로 구성된 홀로그램 코어 HUD
-- 대기, 듣기, 분석, 응답 상태 애니메이션
-- 네이티브 macOS 창과 메뉴바 진입점
-- 네이티브 iPhone 동반 앱과 6자리 페어링 화면
-- Mac·iPhone이 공유하는 버전 기반 메시지 프로토콜
-- Bonjour 자동 탐색과 Network.framework 기반 로컬 TCP 연결
-- 페어링 완료 후 iPhone 명령을 Mac 승인 정책으로 전달
-- TLS 1.3 기반 종단 간 암호화
-- Keychain에 저장되는 256비트 기기 자격 증명과 자동 재연결
-- 명령 해석 및 정책 테스트
+VANTA is an open-source personal AI agent designed to connect AI reasoning with local devices, voice interfaces, tools, services, and automation.
 
-## 모듈 구조
+## Overview
+
+VANTA is a personal AI agent centered on macOS. Its device and client layer is written in Swift, while the JARVIS Brain provides the Python-based conversation and reasoning backend. VANTA uses OrcaRouter as its current LLM routing/provider layer. The existing Node.js Codex relay remains available as a legacy fallback.
+
+JARVIS remains the internal codename and technical identifier for existing modules, packages, API paths, and environment variables.
+
+## Features
+
+- Korean text command interpretation
+- Voice recognition and speech output
+- Wake word and clap detection
+- Permission-based local actions
+- macOS application launching after approval
+- AirPods head-motion approval and cancel controls
+- Secure local Mac-iPhone communication
+- TLS-based device pairing
+- Keychain credential storage
+- Python JARVIS Brain
+- OrcaRouter LLM integration
+- Legacy Node.js Codex relay fallback
+- Swift and Python tests
+
+## Architecture
 
 ```text
-Apps/AgentMac        정식 macOS 앱과 메뉴바 진입점
-Apps/AgentPhone      iPhone 페어링과 원격 명령 인터페이스
-Sources/JarvisCore   플랫폼과 UI에 독립적인 명령·승인·실행 코어
-Sources/AgentVoice  권한·마이크 입력·음성 인식·음성 합성 계층
-Sources/AgentMotion AirPods 자세 스트림과 머리 제스처 판정 계층
-Sources/AgentLink   Mac·iPhone 메시지 모델과 검증 코덱
-Sources/AgentIntelligence OpenAI 대화 요청·응답과 런타임 보안 설정
-Sources/AgentUI      재사용 가능한 SwiftUI 홀로그램 HUD
-Sources/JarvisCLI    코어를 빠르게 검증하는 터미널 클라이언트
-Sources/JarvisHUD    SwiftPM HUD 프로토타입 실행기
-Server               개인 전용 인증·요청 제한·OpenAI 릴레이 서버
-Tests                코어 동작 테스트
-Project.swift        재현 가능한 Xcode 프로젝트 선언
+User
+  → Swift Client
+  → JarvisCore
+  → Local Action or AI Request
+
+Local Action
+  JarvisCore
+  → Permission
+  → MacActionExecutor
+
+AI Request
+  AgentIntelligence
+  → Python JARVIS Brain
+  → OrcaRouter
+  → LLM
 ```
 
-## 정식 macOS 앱 실행
+LLMs cannot directly execute arbitrary shell commands or macOS actions. Local device actions remain behind the existing permission system.
 
-Tuist 4 이상과 Xcode 26 이상이 필요합니다.
+## Repository Structure
+
+```text
+Apps/           Swift macOS and iPhone clients
+Sources/        Swift command, permission, voice, motion, link, UI, and AI modules
+Brain/          Python FastAPI conversation and reasoning service
+Server/         Legacy Node.js Codex relay fallback
+Tests/          Swift test suites
+Package.swift   Swift Package Manager manifest
+Project.swift   Tuist project declaration
+```
+
+## Getting Started
+
+### Swift macOS client
+
+The macOS and iPhone clients use Tuist and Xcode.
 
 ```sh
 tuist generate
 open Agent.xcworkspace
 ```
 
-Xcode에서 `AgentMac` 스킴과 `My Mac` 실행 대상을 선택합니다. 생성된 `.xcodeproj`와 `.xcworkspace`는 로컬 산출물이므로 Git에 커밋하지 않습니다.
-
-iPhone 화면은 `AgentPhone` 스킴과 iPhone 시뮬레이터 또는 실제 기기를 선택해 실행합니다. Mac 앱 상단의 6자리 코드를 입력하면 Bonjour로 발견된 Mac과 TLS 1.3 세션을 맺고 원격 명령을 보낼 수 있습니다. 두 기기는 같은 로컬 네트워크에 있어야 하며 양쪽에서 로컬 네트워크 접근을 허용해야 합니다.
-
-최초 페어링 코드는 TLS 임시 PSK를 만드는 데 사용됩니다. 연결이 검증되면 256비트 장기 자격 증명을 암호화된 세션 안에서 발급하고 각 기기의 Keychain에 저장합니다. 이후에는 코드를 다시 입력하지 않고 해당 자격 증명으로 연결하며 네트워크가 끊기면 최대 8초 간격으로 자동 재시도합니다.
-
-명령행 빌드:
-
-```sh
-xcodebuild \
-  -workspace Agent.xcworkspace \
-  -scheme AgentMac \
-  -configuration Debug \
-  build \
-  CODE_SIGNING_ALLOWED=NO
-```
-
-## 빠른 프로토타입 실행
+Select the `AgentMac` scheme and `My Mac` in Xcode. For a Swift package prototype:
 
 ```sh
 swift run jarvis
 swift run jarvis-hud
 ```
 
-HUD 명령창에서 `상태`, `몇 시야?`, `Xcode 열어줘`를 입력할 수 있습니다. 외부 동작은 확인 창에서 승인한 뒤에만 실행됩니다.
+### Python JARVIS Brain
 
-마이크 버튼을 누르면 macOS가 마이크와 음성 인식 권한을 요청합니다. 권한을 허용한 뒤 한국어로 명령하고 다시 버튼을 누르거나 인식이 완료될 때까지 기다리면 기존 명령 승인 정책을 거쳐 실행됩니다. 음성 데이터는 파일로 저장하지 않습니다.
-
-앱이 실행되면 웨이크 모드가 자동으로 시작됩니다. 박수를 한 번 치거나 `자비스`라고 말하면 명령 입력 모드로 전환됩니다. `자비스 Xcode 열어줘`처럼 호출어와 명령을 한 문장으로 말할 수도 있습니다. 응답이 끝나면 웨이크 대기로 자동 복귀합니다.
-
-## AI 대화 연결
-
-지원하지 않는 로컬 명령이나 일반 질문은 Mac에서 실행 중인 Codex app-server로 전달됩니다. AgentMac과 iPhone에는 OpenAI API 키를 넣지 않습니다. Codex CLI를 Mac에서 한 번 로그인한 뒤 개인 서버를 실행하세요.
+The Brain requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
 
 ```sh
-codex login
-cd Server
-./scripts/install-macos-service.sh
+cd Brain
+uv sync
+cp .env.example .env
+uv run uvicorn jarvis.app:app \
+  --host 127.0.0.1 \
+  --port 8010 \
+  --reload
 ```
 
-서버는 Codex 로그인 세션을 사용하고, AgentMac은 `JARVIS_AI_ENDPOINT` 또는 localhost 기본 주소로 전용 릴레이에 연결합니다. 클라이언트 토큰은 Keychain에만 저장되며 일반 질문과 답변은 서버가 직접 Codex app-server에 전달합니다.
+JARVIS Brain uses `127.0.0.1:8010` for local development. Configure the Swift client at runtime, without committing credentials:
 
 ```sh
-export JARVIS_AI_ENDPOINT="https://agent.example.com/v1/responses"
-export JARVIS_CLIENT_TOKEN="your-private-device-token"
-open /path/to/AgentMac.app
+export JARVIS_AI_ENDPOINT="http://127.0.0.1:8010/v1/responses"
+export JARVIS_CLIENT_TOKEN="your_client_token_here"
 ```
 
-저장소에는 의존성 없는 Node 기반 Mac 전용 서버가 포함되어 있습니다. Codex 기반 서버 설치와 개인 VPN 배포 절차는 [Server/README.md](Server/README.md)를 따릅니다.
+Set `ORCAROUTER_API_KEY=your_api_key_here` only in `Brain/.env`. `Server/` remains available as the legacy Node.js Codex relay fallback; switching `JARVIS_AI_ENDPOINT` selects the backend.
 
-기기 실행 명령은 AI로 보내지 않고 기존 `JarvisCore` 해석기와 사용자 승인 정책으로 처리합니다. AI가 임의의 셸 명령을 생성하거나 실행할 수는 없습니다.
+## Security Principles
 
-상단 AirPods 버튼은 모션 센서를 지원하는 AirPods가 연결된 경우 헤드 트래킹을 시작합니다. 외부 상태를 변경하는 명령의 승인 창이 표시된 동안 끄덕이면 승인하고, 고개를 좌우로 흔들면 취소합니다. 승인 대기 명령이 없을 때 감지된 움직임은 어떤 작업도 실행하지 않습니다.
+- API keys are never stored in source code.
+- Secrets are stored through environment variables or Keychain.
+- Local device actions require explicit permission.
+- LLMs cannot directly execute arbitrary shell commands.
+- Sensitive credentials must not be committed.
 
-## 테스트
+## Roadmap
 
-```sh
-swift test
-git diff --check
-```
+The following capabilities are not implemented yet:
 
-## 개발 원칙
+- Tool Registry
+- Tool Calling
+- Planner
+- Memory
+- Automation
+- MCP integration
+- Web interface
+- Additional device support
 
-- 알 수 없는 자연어를 임의의 셸 명령으로 실행하지 않습니다.
-- API 키와 장기 자격 증명을 소스 코드나 앱 번들에 저장하지 않습니다.
-- 외부 상태를 변경하는 기능은 승인 정책을 통과해야 합니다.
-- 음성, 손동작, AirPods, iPhone은 동일한 명령 코어에 입력 어댑터로 연결합니다.
-- 마이크와 카메라 같은 민감한 권한은 해당 기능을 처음 사용할 때 요청합니다.
+## Contributing
 
-다음 단계는 사용자가 신뢰 기기를 확인·해제할 수 있는 관리 화면과 다중 기기 지원을 추가하는 것입니다.
+Issues and pull requests are welcome. More detailed contribution guidelines will be added as the project matures.
+
+## License
+
+Licensed under the Apache License 2.0.
+
+See [LICENSE](LICENSE) for details.
